@@ -166,7 +166,7 @@ npx wrangler deploy
 
 The management dialog accepts Chrome `.html` or `.htm` exports up to 10 MiB. It closes after file selection, shows an indeterminate progress overlay, imports metadata with bounded concurrency, and reloads after success.
 
-The parser excludes Chrome's synthetic root folder named `ブックマーク バー`. HTTP(S) bookmarks receive metadata enrichment. `javascript:` and `data:` bookmarklets are retained but are not sent to the metadata or preview fetchers.
+The parser excludes Chrome's synthetic root folder named in Japanese `ブックマーク バー`. HTTP(S) bookmarks receive metadata enrichment. `javascript:` and `data:` bookmarklets are retained but are not sent to the metadata or preview fetchers.
 
 ## Reset Behavior
 > [!CAUTION]
@@ -185,7 +185,7 @@ The parser excludes Chrome's synthetic root folder named `ブックマーク バ
 ### 概要
 
 Astro と Cloudflare Workers で動作する個人向けブックマーク管理アプリです。ブックマーク、フォルダ、タグは D1、言語とカラーモードは専用の KV、見た目と色は CSS で管理し、責務を分離しています。
-> [!WARNING]
+> [!CAUTION]
 > 本番環境にはアプリ内認証がないため、公開前に **Cloudflare Access などで必ず保護**してください。
 
 ### ローカル実行
