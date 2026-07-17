@@ -2,9 +2,8 @@
 
 A private, responsive bookmark manager built with Astro and Cloudflare Workers. Bookmark data is stored in Cloudflare D1, UI preferences are stored in a dedicated Cloudflare KV namespace, and all visual tokens remain in CSS.
 
-> [!WARNING]
+> [!CAUTION]
 > This application exposes data-changing APIs and does not include application-level authentication.
->
 > **Protect production deployments with Cloudflare Access** or an equivalent access policy.
 
 ## Features
