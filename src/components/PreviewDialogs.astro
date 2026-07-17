@@ -1,0 +1,36 @@
+---
+import type { defaultLocale, messages } from "../i18n/messages";
+
+type Copy = (typeof messages)[typeof defaultLocale];
+
+interface Props {
+  t: Copy;
+}
+
+const { t } = Astro.props;
+---
+
+<dialog id="structuredPreview" aria-labelledby="previewTitle">
+  <section class="preview-panel">
+    <header>
+      <div>
+        <h3 id="previewTitle" data-i18n="structuredPreview">{t.structuredPreview}</h3>
+        <p id="previewStatus" data-i18n="previewIdle">{t.previewIdle}</p>
+      </div>
+      <button type="button" id="closePreview" aria-label={t.close} data-i18n-aria-label="close">×</button>
+    </header>
+    <pre id="previewContent"></pre>
+  </section>
+</dialog>
+
+<dialog id="previewLinkDialog" aria-labelledby="previewLinkDialogTitle">
+  <section class="link-choice-panel">
+    <h3 id="previewLinkDialogTitle" data-i18n="previewLinkActionTitle">{t.previewLinkActionTitle}</h3>
+    <p id="previewLinkUrl"></p>
+    <div class="link-choice-actions">
+      <button id="openPreviewLinkExternal" type="button" class="primary" data-i18n="openInNewTab">{t.openInNewTab}</button>
+      <button id="openPreviewLinkInline" type="button" data-i18n="openInPreview">{t.openInPreview}</button>
+      <button id="cancelPreviewLink" type="button" data-i18n="cancel">{t.cancel}</button>
+    </div>
+  </section>
+</dialog>

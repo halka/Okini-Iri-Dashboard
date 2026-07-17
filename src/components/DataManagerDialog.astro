@@ -1,0 +1,65 @@
+---
+import type { defaultLocale, messages } from "../i18n/messages";
+
+type Copy = (typeof messages)[typeof defaultLocale];
+
+interface Props {
+  t: Copy;
+}
+
+const { t } = Astro.props;
+---
+
+<dialog id="manager" aria-labelledby="managerTitle">
+  <section class="manager-panel">
+    <header>
+      <h3 id="managerTitle" data-i18n="manageData">{t.manageData}</h3>
+      <button type="button" id="closeManager" aria-label={t.close} data-i18n-aria-label="close">×</button>
+    </header>
+
+    <section class="import-panel">
+      <div>
+        <h4 data-i18n="importBookmarks">{t.importBookmarks}</h4>
+        <p data-i18n="importBookmarksHint">{t.importBookmarksHint}</p>
+      </div>
+      <label class="file-button">
+        <span data-i18n="chooseBookmarkHtml">{t.chooseBookmarkHtml}</span>
+        <input id="bookmarkHtmlInput" type="file" accept=".html,.htm,text/html" />
+      </label>
+    </section>
+
+    <section class="reset-panel">
+      <div>
+        <h4 data-i18n="resetData">{t.resetData}</h4>
+        <p data-i18n="resetDataHint">{t.resetDataHint}</p>
+      </div>
+      <button id="resetDataButton" type="button" class="danger" data-i18n="resetDataButton">{t.resetDataButton}</button>
+    </section>
+
+    <div class="manager-grid">
+      <section>
+        <div class="manager-heading">
+          <h4 data-i18n="folders">{t.folders}</h4>
+          <p data-i18n="emptyFoldersOnly">{t.emptyFoldersOnly}</p>
+        </div>
+        <form id="folderForm" class="compact-form">
+          <input name="name" type="text" aria-label={t.newFolderPlaceholder} maxlength="200" placeholder={t.newFolderPlaceholder} required data-i18n-placeholder="newFolderPlaceholder" data-i18n-aria-label="newFolderPlaceholder" />
+          <button type="submit" title={t.addFolderTitle} data-i18n="add" data-i18n-title="addFolderTitle">{t.add}</button>
+        </form>
+        <div id="folderManageList" class="manage-list"></div>
+      </section>
+
+      <section>
+        <div class="manager-heading">
+          <h4 data-i18n="tags">{t.tags}</h4>
+          <p data-i18n="tagManageHint">{t.tagManageHint}</p>
+        </div>
+        <form id="tagForm" class="compact-form">
+          <input name="name" type="text" aria-label={t.tagNamePlaceholder} maxlength="100" placeholder={t.tagNamePlaceholder} required data-i18n-placeholder="tagNamePlaceholder" data-i18n-aria-label="tagNamePlaceholder" />
+          <button type="submit" title={t.addTagTitle} data-i18n="add" data-i18n-title="addTagTitle">{t.add}</button>
+        </form>
+        <div id="tagManageList" class="manage-list"></div>
+      </section>
+    </div>
+  </section>
+</dialog>

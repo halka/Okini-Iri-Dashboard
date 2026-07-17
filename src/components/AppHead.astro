@@ -1,0 +1,53 @@
+---
+import { siteMeta } from "../config/site";
+import type { Preferences } from "../config/preferences";
+import type { defaultLocale, messages } from "../i18n/messages";
+
+type Copy = (typeof messages)[typeof defaultLocale];
+
+interface Props {
+  t: Copy;
+  preferences: Preferences;
+}
+
+const { t, preferences } = Astro.props;
+const ogImageUrl = new URL(siteMeta.ogImage, siteMeta.url).href;
+---
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="" />
+  <meta name="description" content={t.metaDescription || siteMeta.description} />
+  <meta property="og:title" content={siteMeta.title} />
+  <meta property="og:description" content={siteMeta.description} />
+  <meta property="og:type" content={siteMeta.ogType} />
+  <meta property="og:url" content={siteMeta.url} />
+  <meta property="og:site_name" content={siteMeta.siteName} />
+  <meta property="og:image" content={ogImageUrl} />
+  <meta property="og:locale" content={siteMeta.locale} />
+  <meta property="og:locale:alternate" content={siteMeta.alternateLocale} />
+  <meta name="twitter:card" content={siteMeta.twitterCard} />
+  <meta name="twitter:title" content={siteMeta.title} />
+  <meta name="twitter:description" content={siteMeta.description} />
+  <meta name="twitter:image" content={ogImageUrl} />
+  <title>{t.appTitle}</title>
+  <link rel="canonical" href={siteMeta.url} />
+  <link rel="icon" href="/favicon.svg" />
+  <script is:inline define:vars={{ preferences }}>
+    const storedMode = preferences.colorMode;
+    const storedLocale = preferences.locale;
+    const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.themePreference = storedMode;
+    document.documentElement.dataset.colorMode = storedMode === "system" ? (systemDark ? "dark" : "light") : storedMode;
+    document.documentElement.dataset.locale = storedLocale;
+    document.documentElement.lang = storedLocale;
+    requestAnimationFrame(() => {
+      const themeColor = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+      document.querySelector("meta[name='theme-color']")?.setAttribute("content", themeColor);
+    });
+  </script>
+</head>

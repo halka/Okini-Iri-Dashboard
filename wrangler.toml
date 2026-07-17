@@ -1,0 +1,22 @@
+name = "bookmark-dashboard"
+main = "./dist/_worker.js/index.js"
+compatibility_date = "2026-07-17"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+binding = "ASSETS"
+directory = "./dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bookmark-dashboard"
+database_id = "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "PREFERENCES"
+id = "REPLACE_WITH_CLOUDFLARE_KV_NAMESPACE_ID"
+
+[[kv_namespaces]]
+binding = "SESSION"
+id = "REPLACE_WITH_CLOUDFLARE_SESSION_KV_NAMESPACE_ID"

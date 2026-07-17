@@ -1,0 +1,71 @@
+---
+import type { defaultLocale, messages } from "../i18n/messages";
+
+type Copy = (typeof messages)[typeof defaultLocale];
+
+interface Props {
+  t: Copy;
+}
+
+const { t } = Astro.props;
+---
+
+<main class="shell">
+  <a class="skip-link" href="#workspace" data-i18n="skipToContent">{t.skipToContent}</a>
+  <header class="topbar">
+    <h1 class="app-title">
+      <img src="/favicon.svg" alt="" width="32" height="32" aria-hidden="true" />
+      <span data-i18n="appTitle">{t.appTitle}</span>
+    </h1>
+    <div class="header-filters">
+      <label class="search" aria-label={t.search}>
+        <input id="searchInput" type="search" placeholder={t.searchPlaceholder} autocomplete="off" enterkeyhint="search" data-i18n-placeholder="searchPlaceholder" />
+      </label>
+      <label class="select-filter" aria-label={t.folder}>
+        <select id="folderSelect">
+          <option value="" data-i18n="all">{t.all}</option>
+        </select>
+      </label>
+      <button id="favoriteOnly" type="button" class="filter-toggle" aria-pressed="false" aria-controls="bookmarkList" data-i18n="favoriteOnly">{t.favoriteOnly}</button>
+    </div>
+    <div class="primary-actions">
+      <button id="newButton" type="button" class="primary" data-i18n="newLink">{t.newLink}</button>
+    </div>
+    <div class="header-tools">
+      <button
+        id="languageButton"
+        type="button"
+        class="language-button"
+        aria-label={t.languageLabel}
+        title={t.languageTitle}
+        data-i18n="languageButton"
+        data-i18n-aria-label="languageLabel"
+        data-i18n-title="languageTitle"
+      >
+        {t.languageButton}
+      </button>
+      <button
+        id="themeButton"
+        type="button"
+        class="theme-button"
+        aria-label={t.colorModeLabel.replace("{mode}", t.colorModeAuto)}
+        title={t.colorModeTitle}
+        data-i18n-title="colorModeTitle"
+      >
+        {t.colorModeAuto}
+      </button>
+      <button id="manageDataButton" type="button" class="icon-button" aria-label={t.manageData} title={t.manageData} data-i18n-aria-label="manageData" data-i18n-title="manageData">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </header>
+
+  <section id="workspace" class="workspace" tabindex="-1">
+    <section class="content-grid">
+      <div id="bookmarkList" class="bookmark-list" aria-live="polite" aria-busy="true"></div>
+    </section>
+  </section>
+  <button id="moveToTopButton" type="button" class="move-top-button" aria-label={t.moveToTop} title={t.moveToTop} data-i18n-aria-label="moveToTop" data-i18n-title="moveToTop" hidden>{t.moveToTop}</button>
+</main>

@@ -1,0 +1,38 @@
+---
+import AppHead from "../components/AppHead.astro";
+import AppShell from "../components/AppShell.astro";
+import BookmarkEditorDialog from "../components/BookmarkEditorDialog.astro";
+import DataManagerDialog from "../components/DataManagerDialog.astro";
+import PreviewDialogs from "../components/PreviewDialogs.astro";
+import { messages } from "../i18n/messages";
+import { defaultPreferences } from "../config/preferences";
+import { getKv } from "../lib/kv";
+import { readPreferences } from "../lib/preferences";
+import "../styles/global.css";
+
+const preferences = await readPreferences(getKv(Astro.locals)).catch(() => defaultPreferences);
+const t = messages[preferences.locale];
+---
+
+<!doctype html>
+<html lang={preferences.locale}>
+  <AppHead t={t} preferences={preferences} />
+  <body>
+    <AppShell t={t} />
+    <BookmarkEditorDialog t={t} />
+    <DataManagerDialog t={t} />
+    <PreviewDialogs t={t} />
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="importOverlay" class="import-overlay" role="status" aria-live="assertive" hidden>
+      <div class="import-progress">
+        <span class="spinner" aria-hidden="true"></span>
+        <strong data-i18n="importingBookmarks">{t.importingBookmarks}</strong>
+        <p data-i18n="importingBookmarksHint">{t.importingBookmarksHint}</p>
+        <div class="progress-bar" aria-hidden="true"><span></span></div>
+      </div>
+    </div>
+    <script>
+      import "../scripts/dashboard";
+    </script>
+  </body>
+</html>

@@ -1,0 +1,80 @@
+---
+import type { defaultLocale, messages } from "../i18n/messages";
+
+type Copy = (typeof messages)[typeof defaultLocale];
+
+interface Props {
+  t: Copy;
+}
+
+const { t } = Astro.props;
+---
+
+<dialog id="editor" aria-labelledby="editorTitle">
+  <form id="bookmarkForm" method="dialog" class="editor-form">
+    <input type="hidden" name="id" />
+    <input type="hidden" name="faviconUrl" />
+    <header>
+      <h3 id="editorTitle" data-i18n="newLink">{t.newLink}</h3>
+      <button type="button" id="closeEditor" aria-label={t.close} data-i18n-aria-label="close">×</button>
+    </header>
+
+    <label>
+      <span data-i18n="url">{t.url}</span>
+      <input name="url" type="url" inputmode="url" autocomplete="url" autocapitalize="none" spellcheck="false" maxlength="65536" required />
+    </label>
+    <div class="metadata-row">
+      <div id="faviconPreview" class="favicon preview-favicon"></div>
+      <p id="metadataStatus" data-i18n="metadataIdle">{t.metadataIdle}</p>
+      <button id="fetchMetadataButton" type="button" data-i18n="refetch">{t.refetch}</button>
+    </div>
+    <label>
+      <span data-i18n="title">{t.title}</span>
+      <input name="title" type="text" autocomplete="off" maxlength="500" />
+    </label>
+    <label>
+      <span data-i18n="folder">{t.folder}</span>
+      <select name="folderId"></select>
+    </label>
+    <div id="inlineFolderForm" class="inline-folder-form">
+      <input name="name" type="text" aria-label={t.addFolderPlaceholder} maxlength="200" placeholder={t.addFolderPlaceholder} data-i18n-placeholder="addFolderPlaceholder" data-i18n-aria-label="addFolderPlaceholder" />
+      <button type="button" data-i18n="add">{t.add}</button>
+    </div>
+    <label>
+      <span data-i18n="description">{t.description}</span>
+      <input name="description" type="text" maxlength="5000" />
+    </label>
+    <label>
+      <span data-i18n="notes">{t.notes}</span>
+      <textarea name="notes" rows="4" maxlength="20000"></textarea>
+    </label>
+    <fieldset>
+      <legend data-i18n="tags">{t.tags}</legend>
+      <select id="editorTags" class="editor-tags" name="tagIds" size="5" multiple></select>
+      <div id="inlineTagForm" class="inline-tag-form">
+        <input name="name" type="text" aria-label={t.addTagPlaceholder} maxlength="100" placeholder={t.addTagPlaceholder} data-i18n-placeholder="addTagPlaceholder" data-i18n-aria-label="addTagPlaceholder" />
+        <button type="button" data-i18n="add">{t.add}</button>
+      </div>
+    </fieldset>
+    <div class="switch-row enhanced-switches">
+      <label class="switch-card">
+        <input name="favorite" type="checkbox" />
+        <span>
+          <strong data-i18n="favorite">{t.favorite}</strong>
+          <small data-i18n="favoriteHint">{t.favoriteHint}</small>
+        </span>
+      </label>
+      <label class="switch-card">
+        <input name="structuredPreviewEnabled" type="checkbox" />
+        <span>
+          <strong data-i18n="enableStructuredPreview">{t.enableStructuredPreview}</strong>
+          <small data-i18n="enableStructuredPreviewHint">{t.enableStructuredPreviewHint}</small>
+        </span>
+      </label>
+    </div>
+    <footer>
+      <button type="button" id="deleteButton" class="danger" data-i18n="delete">{t.delete}</button>
+      <button type="submit" class="primary" data-i18n="save">{t.save}</button>
+    </footer>
+  </form>
+</dialog>
