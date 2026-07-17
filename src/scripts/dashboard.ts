@@ -1,4 +1,4 @@
-import type { Bookmark, BookmarkInput, Folder, Tag } from "../domain/bookmarks";
+import { UNCATEGORIZED_FOLDER_FILTER_ID, type Bookmark, type BookmarkInput, type Folder, type Tag } from "../domain/bookmarks";
 import type { ColorMode } from "../config/preferences";
 import type { Locale, MessageKey } from "../i18n/messages";
 import { requestJson } from "./lib/api-client";
@@ -129,7 +129,7 @@ async function refresh() {
     state.bookmarks = bookmarks;
     state.folders = folders;
     state.tags = tags;
-    if (state.folderId && !folders.some((folder) => folder.id === state.folderId)) state.folderId = "";
+    if (state.folderId && state.folderId !== UNCATEGORIZED_FOLDER_FILTER_ID && !folders.some((folder) => folder.id === state.folderId)) state.folderId = "";
     render();
   } finally {
     if (sequence === refreshSequence) elements.bookmarkList.setAttribute("aria-busy", "false");
@@ -148,6 +148,7 @@ function render() {
 function renderFolders() {
   elements.folderSelect.innerHTML = [
     `<option value="">${escapeHtml(t("all"))}</option>`,
+    `<option value="${UNCATEGORIZED_FOLDER_FILTER_ID}">${escapeHtml(t("uncategorized"))}</option>`,
     ...state.folders.map((folder) => `<option value="${escapeAttribute(folder.id)}">${escapeHtml(folderLabel(folder))}</option>`)
   ].join("");
   elements.folderSelect.value = state.folderId;

@@ -1,5 +1,6 @@
 ---
 import type { defaultLocale, messages } from "../i18n/messages";
+import { UNCATEGORIZED_FOLDER_FILTER_ID } from "../domain/bookmarks";
 
 type Copy = (typeof messages)[typeof defaultLocale];
 
@@ -24,6 +25,7 @@ const { t } = Astro.props;
       <label class="select-filter" aria-label={t.folder}>
         <select id="folderSelect">
           <option value="" data-i18n="all">{t.all}</option>
+          <option value={UNCATEGORIZED_FOLDER_FILTER_ID} data-i18n="uncategorized">{t.uncategorized}</option>
         </select>
       </label>
       <button id="favoriteOnly" type="button" class="filter-toggle" aria-pressed="false" aria-controls="bookmarkList" data-i18n="favoriteOnly">{t.favoriteOnly}</button>

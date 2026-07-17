@@ -122,7 +122,7 @@ export const messages = {
     search: "Search",
     searchPlaceholder: "Search title, URL, or notes",
     favoriteOnly: "Favorites",
-    newLink: "New",
+    newLink: "Add",
     colorModeAuto: "Auto",
     colorModeLight: "Light",
     colorModeDark: "Dark",

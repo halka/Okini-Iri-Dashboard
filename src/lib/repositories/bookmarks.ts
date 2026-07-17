@@ -1,4 +1,4 @@
-import type { Bookmark, BookmarkFilters, BookmarkInput, BookmarkPatch } from "../../domain/bookmarks";
+import { UNCATEGORIZED_FOLDER_FILTER_ID, type Bookmark, type BookmarkFilters, type BookmarkInput, type BookmarkPatch } from "../../domain/bookmarks";
 import { mapBookmark, type D1Row } from "./mappers";
 
 const bookmarkSelect = `
@@ -24,6 +24,8 @@ export async function listBookmarks(db: D1Database, filters: BookmarkFilters = {
     where.push("(b.title LIKE ? OR b.url LIKE ? OR b.description LIKE ? OR b.notes LIKE ?)");
     const like = `%${filters.query}%`;
     binds.push(like, like, like, like);
+  } else if (filters.folderId === UNCATEGORIZED_FOLDER_FILTER_ID && !filters.favorite) {
+    where.push("b.folder_id IS NULL");
   } else if (filters.folderId && !filters.favorite) {
     where.push("b.folder_id = ?");
     binds.push(filters.folderId);

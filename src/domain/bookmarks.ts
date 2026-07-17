@@ -3,6 +3,8 @@ export type Tag = {
   name: string;
 };
 
+export const UNCATEGORIZED_FOLDER_FILTER_ID = "__uncategorized";
+
 export type Folder = {
   id: string;
   name: string;
