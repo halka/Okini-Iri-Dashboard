@@ -160,7 +160,8 @@ npm run build
 npx wrangler deploy
 ```
 
-Apply a Cloudflare Access policy before sharing the Worker URL. Bookmarklets and imported URLs should be treated as trusted personal data.
+> [!CAUTION]
+> Apply a Cloudflare Access policy before sharing the Worker URL. Bookmarklets and imported URLs should be treated as trusted personal data.
 
 ## Import Behavior
 
