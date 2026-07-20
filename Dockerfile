@@ -43,5 +43,6 @@ EXPOSE 8787
 # Apply local D1 migrations then start the Worker
 # --ip 0.0.0.0  → makes the port reachable from outside the container
 # --local        → use local D1 / KV (no Cloudflare account needed)
-# Astro generates the Worker entrypoint and assets paths in dist/server/wrangler.json.
-CMD ["sh", "-c", "npx wrangler d1 migrations apply bookmark-dashboard --local && npx wrangler dev --config dist/server/wrangler.json --ip 0.0.0.0 --local"]
+# Astro generates the Worker entrypoint, assets paths, and bindings in this config.
+# Both commands must use it so migrations and requests resolve the same local D1 database.
+CMD ["sh", "-c", "npx wrangler d1 migrations apply DB --config dist/server/wrangler.json --local --persist-to /app/.wrangler/state && npx wrangler dev --config dist/server/wrangler.json --ip 0.0.0.0 --local --persist-to /app/.wrangler/state"]

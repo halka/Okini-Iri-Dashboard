@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",
-    "preview": "wrangler dev --config dist/server/wrangler.json",
+    "preview": "wrangler dev --config dist/server/wrangler.json --persist-to .wrangler/state",
     "cf-typegen": "wrangler types",
     "rebuild:local": "node scripts/rebuild-local.mjs",
     "db:migrate:local": "wrangler d1 migrations apply bookmark-dashboard --local",
