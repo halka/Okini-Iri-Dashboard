@@ -1,6 +1,7 @@
 import { UNCATEGORIZED_FOLDER_FILTER_ID, type Bookmark, type BookmarkInput, type Folder, type Tag } from "../domain/bookmarks";
 import type { ColorMode } from "../config/preferences";
 import type { Locale, MessageKey } from "../i18n/messages";
+import { readTextBlob, UnsupportedTextEncodingError } from "../lib/text-encoding";
 import { requestJson } from "./lib/api-client";
 import { byId, formControl } from "./lib/dom";
 import { escapeAttribute, escapeHtml, faviconHtml, faviconMarkup, safeHost, setupFaviconFallbacks } from "./lib/format";
@@ -188,7 +189,18 @@ function renderManager() {
 
 function renderBookmarks() {
   if (!state.bookmarks.length) {
-    elements.bookmarkList.innerHTML = `<div class="empty-panel">${escapeHtml(t("noLinks"))}</div>`;
+    const isUnfilteredView = !state.query && !state.folderId && !state.favoriteOnly;
+    elements.bookmarkList.innerHTML = isUnfilteredView
+      ? `<section class="empty-panel first-run-panel">
+          <h2>${escapeHtml(t("importBookmarks"))}</h2>
+          <p>${escapeHtml(t("importBookmarksHint"))}</p>
+          <label class="file-button first-run-import">
+            <span>${escapeHtml(t("chooseBookmarkHtml"))}</span>
+            <input type="file" accept=".html,.htm,text/html" data-initial-bookmark-import aria-label="${escapeAttribute(t("chooseBookmarkHtml"))}" />
+          </label>
+          <small>${escapeHtml(t("bookmarkHtmlRequirements"))}</small>
+        </section>`
+      : `<div class="empty-panel">${escapeHtml(t("noLinks"))}</div>`;
     return;
   }
 
@@ -474,30 +486,30 @@ async function deleteTag(id: string) {
   showToast(t("tagDeleted"));
 }
 
-async function importBookmarkHtml() {
-  const file = elements.bookmarkHtmlInput.files?.[0];
+async function importBookmarkHtml(input: HTMLInputElement) {
+  const file = input.files?.[0];
   if (!file) return;
   if (!/\.html?$/i.test(file.name) && file.type !== "text/html") {
-    elements.bookmarkHtmlInput.value = "";
+    input.value = "";
     showToast(t("invalidBookmarkHtml"));
     return;
   }
   if (file.size > 10 * 1024 * 1024) {
-    elements.bookmarkHtmlInput.value = "";
+    input.value = "";
     showToast(t("importFileTooLarge"));
     return;
   }
 
   const force = state.bookmarks.length > 0 || state.folders.length > 0 ? window.confirm(t("confirmReplaceBookmarks")) : true;
   if (!force) {
-    elements.bookmarkHtmlInput.value = "";
+    input.value = "";
     return;
   }
 
-  elements.manager.close();
+  if (elements.manager.open) elements.manager.close();
   elements.importOverlay.hidden = false;
   try {
-    const html = await file.text();
+    const html = await readTextBlob(file);
     await requestJson("/api/import", {
       method: "POST",
       body: JSON.stringify({ html, source: file.name, force })
@@ -505,9 +517,10 @@ async function importBookmarkHtml() {
     window.location.reload();
   } catch (error) {
     elements.importOverlay.hidden = true;
-    showError(error);
+    if (error instanceof UnsupportedTextEncodingError) showToast(t("unsupportedBookmarkEncoding"));
+    else showError(error);
   } finally {
-    elements.bookmarkHtmlInput.value = "";
+    input.value = "";
   }
 }
 
@@ -571,6 +584,10 @@ elements.workspace.addEventListener("scroll", () => {
   elements.moveToTopButton.hidden = elements.workspace.scrollTop < 320;
 });
 elements.bookmarkList.addEventListener("click", handleBookmarkListClick);
+elements.bookmarkList.addEventListener("change", (event) => {
+  const input = (event.target as Element).closest<HTMLInputElement>("[data-initial-bookmark-import]");
+  if (input) importBookmarkHtml(input).catch(showError);
+});
 byId<HTMLButtonElement>("closeEditor").addEventListener("click", () => elements.editor.close());
 byId<HTMLButtonElement>("closePreview").addEventListener("click", () => elements.structuredPreview.close());
 elements.previewContent.addEventListener("click", (event) => {
@@ -599,7 +616,7 @@ formControl<HTMLInputElement>(elements.form, "title").addEventListener("input", 
 });
 elements.manageDataButton.addEventListener("click", () => elements.manager.showModal());
 byId<HTMLButtonElement>("closeManager").addEventListener("click", () => elements.manager.close());
-elements.bookmarkHtmlInput.addEventListener("change", () => importBookmarkHtml().catch(showError));
+elements.bookmarkHtmlInput.addEventListener("change", () => importBookmarkHtml(elements.bookmarkHtmlInput).catch(showError));
 elements.resetDataButton.addEventListener("click", () => resetData().catch(showError));
 elements.folderSelect.addEventListener("change", () => {
   state.folderId = elements.folderSelect.value;

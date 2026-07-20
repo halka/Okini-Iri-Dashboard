@@ -54,7 +54,7 @@ export type BookmarkFilters = {
   favorite?: boolean;
 };
 
-export type ImportedFolder = {
+export type ChromeBookmarkFolder = {
   id?: string;
   name: string;
   parentId?: string | null;
@@ -63,7 +63,7 @@ export type ImportedFolder = {
   lastModified?: number | null;
 };
 
-export type ImportedBookmark = {
+export type ChromeBookmarkItem = {
   id?: string;
   title?: string;
   name?: string;
@@ -77,8 +77,8 @@ export type ImportedBookmark = {
   addDate?: number | null;
 };
 
-export type ImportedBookmarksFile = {
+export type ChromeBookmarksImport = {
   source?: string;
-  folders?: ImportedFolder[];
-  bookmarks?: ImportedBookmark[];
+  folders?: ChromeBookmarkFolder[];
+  bookmarks?: ChromeBookmarkItem[];
 };

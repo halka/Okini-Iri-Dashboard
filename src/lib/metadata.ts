@@ -1,4 +1,5 @@
 import { appConfig } from "../config/app";
+import { readResponseText } from "./text-encoding";
 
 export type UrlMetadata = {
   url: string;
@@ -35,7 +36,7 @@ export async function fetchUrlMetadata(inputUrl: string): Promise<UrlMetadata> {
     return { ...fallback, faviconUrl: await firstExistingIcon(defaultIconCandidates(finalUrl)) };
   }
 
-  const html = (await response.text()).slice(0, 180_000);
+  const html = (await readResponseText(response, 512 * 1024)).text.slice(0, 180_000);
   const title = decodeHtml(findTitle(html) || findMeta(html, "og:title") || fallback.title);
   const description = decodeHtml(
     findMeta(html, "description") || findMeta(html, "og:description") || findMeta(html, "twitter:description") || ""

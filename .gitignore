@@ -4,4 +4,3 @@ dist/
 .wrangler/
 .DS_Store
 npm-debug.log*
-src/data/imported-bookmarks.json

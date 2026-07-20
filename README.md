@@ -6,8 +6,8 @@ Production access is protected by OpenID Connect (OIDC). The application uses th
 
 ## Features
 
-- Import Chrome bookmark HTML exports with progress feedback and automatic reload
-- Fetch redirect-resolved URLs, titles, descriptions, and favicons automatically
+- Import UTF-8 and legacy Japanese Chrome bookmark HTML exports with progress feedback and automatic reload
+- Fetch redirect-resolved URLs, titles, descriptions, and favicons with legacy Japanese encoding support
 - Create, read, update, and delete bookmarks, folders, and tags
 - Delete a folder together with its nested folders and bookmarks
 - Search across title, URL, description, and notes
@@ -19,7 +19,7 @@ Production access is protected by OpenID Connect (OIDC). The application uses th
 - Switch between Japanese and English without changing control dimensions
 - Use light, dark, or device-controlled color modes
 - Work across phone, tablet, desktop, and iOS Safari layouts
-- Fully reset D1 data without silently reseeding it on the next GET request
+- Fully reset all bookmark data stored in D1
 - Authenticate pages and APIs through a configurable OIDC provider
 - Restrict access to selected email addresses or email domains
 - End both the local application session and, when supported, the OIDC provider session
@@ -32,6 +32,7 @@ Production access is protected by OpenID Connect (OIDC). The application uses th
 - Cloudflare KV `PREFERENCES` for locale and color-mode preferences
 - Cloudflare KV `SESSION` for Astro's adapter-managed session storage
 - `oauth4webapi` for the OIDC Authorization Code flow with PKCE
+- `encoding-japanese` for browser-side UTF-8, Shift_JIS, EUC-JP, and ISO-2022-JP detection and conversion
 - `highlight.js` for JSON/XML syntax highlighting
 - TypeScript in strict mode
 
@@ -65,10 +66,7 @@ Open [http://localhost:8787](http://localhost:8787). When OIDC is not configured
 | `npm run rebuild:local` | Build and apply local D1 migrations |
 | `npm run db:migrate:local` | Apply D1 migrations to the local database |
 | `npm run db:migrate:remote` | Apply D1 migrations to the remote database |
-| `npm run import:bookmarks -- /path/to/bookmarks.html` | Regenerate the optional bundled seed JSON |
 | `npm run cf-typegen` | Regenerate Cloudflare binding types |
-
-The bundled seed file is written to `src/data/imported-bookmarks.json`. A bookmark list GET never imports this file automatically. The `/api/import` endpoint can import it when called without an HTML payload, while the normal UI import sends the selected Chrome HTML directly.
 
 ## Architecture
 
@@ -132,7 +130,7 @@ The archive field and tag colors are not part of the current schema. Tag and the
 | `/api/tags/:id` | `PATCH`, `DELETE` | Update and delete a tag |
 | `/api/metadata` | `POST` | Resolve an HTTP(S) URL and fetch metadata |
 | `/api/preview` | `POST` | Fetch up to 1 MiB for JSON/XML preview |
-| `/api/import` | `POST` | Import Chrome HTML or the bundled seed file |
+| `/api/import` | `POST` | Import Chrome bookmark HTML |
 | `/api/preferences` | `GET`, `PATCH` | Read and update KV-backed UI preferences |
 | `/api/reset` | `DELETE` | Delete all D1 domain records |
 
@@ -214,13 +212,15 @@ npx wrangler deploy
 
 ## Import Behavior
 
-The management dialog accepts Chrome `.html` or `.htm` exports up to 10 MiB. It closes after file selection, shows an indeterminate progress overlay, imports metadata with bounded concurrency, and reloads after success.
+When D1 has no bookmarks and no search or filter is active, the workspace presents a direct Chrome bookmark HTML picker. The management dialog provides the same import control later.
 
-The parser excludes Chrome's synthetic root folder named in **Japanese** `ブックマーク バー`. HTTP(S) bookmarks receive metadata enrichment. `javascript:` and `data:` bookmarklets are retained but are not sent to the metadata or preview fetchers.
+The importer accepts Chrome `.html` or `.htm` exports up to 10 MiB. UTF-8, Shift_JIS (including Windows-31J), EUC-JP, and ISO-2022-JP input is detected and converted to Unicode before it is sent as UTF-8 JSON. URL metadata and structured preview responses use the same conversion boundary. The importer closes an open management dialog after file selection, shows an indeterminate progress overlay, imports metadata with bounded concurrency, and reloads after success.
+
+The parser excludes Chrome's synthetic root folder named `ブックマーク バー` or `Bookmarks bar`. HTTP(S) bookmarks receive metadata enrichment. `javascript:` and `data:` bookmarklets are retained but are not sent to the metadata or preview fetchers.
 
 ## Reset Behavior
 > [!CAUTION]
-> Full reset deletes bookmarks, folders, tags, and bookmark/tag relationships. It does not delete UI preferences and does not automatically restore bundled seed data. This operation cannot be undone.
+> Full reset deletes bookmarks, folders, tags, and bookmark/tag relationships. It does not delete UI preferences. This operation cannot be undone.
 
 ## Configuration
 

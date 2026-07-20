@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { normalizeUtf8Text } from "./text-encoding";
 
 export class ApiError extends Error {
   constructor(
@@ -74,7 +75,7 @@ export function requiredText(value: unknown, field: string, maxLength = 2_000) {
   if (typeof value !== "string" || !value.trim()) {
     throw new ApiError(`${field} is required`, 422, "validation_error");
   }
-  const text = value.trim();
+  const text = normalizeUtf8Text(value).trim();
   if (text.length > maxLength) {
     throw new ApiError(`${field} is too long`, 422, "validation_error");
   }
@@ -86,7 +87,7 @@ export function optionalText(value: unknown, field: string, maxLength = 10_000) 
   if (typeof value !== "string") {
     throw new ApiError(`${field} must be a string`, 422, "validation_error");
   }
-  const text = value.trim();
+  const text = normalizeUtf8Text(value).trim();
   if (text.length > maxLength) {
     throw new ApiError(`${field} is too long`, 422, "validation_error");
   }
@@ -106,7 +107,7 @@ export function optionalStringArray(value: unknown, field: string, maxItems = 10
   if (!Array.isArray(value) || value.length > maxItems || value.some((item) => typeof item !== "string")) {
     throw new ApiError(`${field} must be an array of strings`, 422, "validation_error");
   }
-  return [...new Set(value.map((item) => item.trim()).filter(Boolean))];
+  return [...new Set(value.map((item) => normalizeUtf8Text(item).trim()).filter(Boolean))];
 }
 
 export function optionalNullableId(value: unknown, field: string) {

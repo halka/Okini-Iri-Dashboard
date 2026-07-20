@@ -1,5 +1,4 @@
-import importedBookmarks from "../../data/imported-bookmarks.json";
-import type { ImportedBookmarksFile } from "../../domain/bookmarks";
+import type { ChromeBookmarksImport } from "../../domain/bookmarks";
 import { isSupportedBookmarkUrl } from "../http";
 import { fetchUrlMetadata } from "../metadata";
 import { resetAllData } from "./reset";
@@ -24,11 +23,7 @@ type NormalizedBookmark = {
 
 const IMPORT_CONCURRENCY = 6;
 
-export async function seedImportedBookmarks(db: D1Database, force = false) {
-  return importBookmarksFile(db, importedBookmarks as ImportedBookmarksFile, force);
-}
-
-export async function importBookmarksFile(db: D1Database, input: ImportedBookmarksFile, force = false) {
+export async function importChromeBookmarks(db: D1Database, input: ChromeBookmarksImport, force = false) {
   const current = await db.prepare("SELECT COUNT(*) AS count FROM bookmarks").first<{ count: number }>();
   if (!force && (current?.count ?? 0) > 0) {
     return { skipped: true, folders: 0, bookmarks: 0 };
@@ -79,7 +74,7 @@ export async function importBookmarksFile(db: D1Database, input: ImportedBookmar
   };
 }
 
-function normalizeImportedBookmarks(input: ImportedBookmarksFile) {
+function normalizeImportedBookmarks(input: ChromeBookmarksImport) {
   const importedFolders = input.folders ?? [];
   const importedBookmarkItems = (input.bookmarks ?? []).filter(
     (bookmark) => bookmark.url?.trim() && isSupportedBookmarkUrl(bookmark.url)

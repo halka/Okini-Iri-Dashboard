@@ -1,9 +1,11 @@
-import type { ImportedBookmarksFile } from "../domain/bookmarks";
+import type { ChromeBookmarksImport } from "../domain/bookmarks";
 
-export function parseChromeBookmarksHtml(html: string, source = "uploaded-bookmarks.html"): ImportedBookmarksFile {
+const chromeRootFolderNames = new Set(["ブックマーク バー", "bookmarks bar"]);
+
+export function parseChromeBookmarksHtml(html: string, source = "uploaded-bookmarks.html"): ChromeBookmarksImport {
   const stack: Array<{ id: string | null; name: string }> = [];
-  const folders: NonNullable<ImportedBookmarksFile["folders"]> = [];
-  const bookmarks: NonNullable<ImportedBookmarksFile["bookmarks"]> = [];
+  const folders: NonNullable<ChromeBookmarksImport["folders"]> = [];
+  const bookmarks: NonNullable<ChromeBookmarksImport["bookmarks"]> = [];
   let folderCounter = 0;
   let bookmarkCounter = 0;
   let cursor = 0;
@@ -125,5 +127,10 @@ function slugPart(value: string) {
 }
 
 function isChromeRootFolder(name: string, attrs: string) {
-  return name === "ブックマーク バー" || /PERSONAL_TOOLBAR_FOLDER\s*=\s*["']?true["']?/i.test(attrs);
+  const normalizedName = name
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  return chromeRootFolderNames.has(normalizedName) || /PERSONAL_TOOLBAR_FOLDER\s*=\s*["']?true["']?/i.test(attrs);
 }

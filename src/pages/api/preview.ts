@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { appConfig } from "../../config/app";
 import { ApiError, apiRoute, isHttpUrl, json, readJson, requiredText } from "../../lib/http";
+import { readResponseText } from "../../lib/text-encoding";
 
 type Payload = {
   url?: string;
@@ -28,14 +29,13 @@ export const POST: APIRoute = apiRoute(async ({ request }) => {
   }
 
   const contentType = response.headers.get("content-type") ?? "";
-  const text = await response.text();
-  const truncated = text.length > MAX_PREVIEW_BYTES;
+  const { text, truncated } = await readResponseText(response, MAX_PREVIEW_BYTES);
 
   return json({
     preview: {
       url: response.url || url.toString(),
       contentType,
-      text: truncated ? text.slice(0, MAX_PREVIEW_BYTES) : text,
+      text,
       truncated
     }
   });
