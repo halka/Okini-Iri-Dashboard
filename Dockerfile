@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build stage ----
-FROM node:22-bookworm-slim AS builder
+FROM node:22-trixie-slim AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ COPY scripts/ ./scripts/
 RUN npm run build
 
 # ---- Runtime stage ----
-FROM node:22-bookworm-slim AS runner
+FROM node:22-trixie-slim AS runner
 
 WORKDIR /app
 
