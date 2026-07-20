@@ -63,6 +63,7 @@ The header menu keeps account information and sign-out controls separate from **
   - [Data Model](#data-model)
   - [API Overview](#api-overview)
   - [Author](#author)
+  - [Contributing](#contributing)
   - [LICENSE](#license)
 
 ## Requirements
@@ -430,6 +431,10 @@ When OIDC is configured, every API endpoint requires an authenticated session an
 - [Website 2](https://rjch.jp)
 
 **Made in Goryokaku**
+
+## Contributing
+
+Contributions are welcome! Feel free to open an issue to report a bug or suggest a feature, or submit a pull request with improvements to the code, documentation, or Docker/container setup.
 
 ## LICENSE
 MIT
