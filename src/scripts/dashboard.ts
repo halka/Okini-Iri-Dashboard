@@ -18,29 +18,6 @@ type DashboardState = {
   favoriteOnly: boolean;
 };
 
-type PublicSettings = {
-  site: {
-    title: string;
-    description: string;
-    url: string;
-    siteName: string;
-    ogImage: string;
-    locale: string;
-    alternateLocale: string;
-    twitterCard: "summary" | "summary_large_image";
-  };
-  oidc: {
-    issuerUrl: string;
-    clientId: string;
-    tokenAuthMethod: "" | "client_secret_basic" | "client_secret_post" | "none";
-    scopes: string;
-    allowedEmails: string;
-    allowedDomains: string;
-    sessionTtlSeconds: number;
-    clientSecretConfigured: boolean;
-  };
-};
-
 const state: DashboardState = {
   bookmarks: [],
   folders: [],
@@ -77,11 +54,6 @@ const elements = {
   tagManageList: byId<HTMLElement>("tagManageList"),
   bookmarkHtmlInput: byId<HTMLInputElement>("bookmarkHtmlInput"),
   resetDataButton: byId<HTMLButtonElement>("resetDataButton"),
-  siteSettingsForm: byId<HTMLFormElement>("siteSettingsForm"),
-  siteSettingsStatus: byId<HTMLElement>("siteSettingsStatus"),
-  oidcSettingsForm: byId<HTMLFormElement>("oidcSettingsForm"),
-  oidcSettingsStatus: byId<HTMLElement>("oidcSettingsStatus"),
-  oidcSecretStatus: byId<HTMLElement>("oidcSecretStatus"),
   importOverlay: byId<HTMLElement>("importOverlay"),
   metadataStatus: byId<HTMLElement>("metadataStatus"),
   faviconPreview: byId<HTMLElement>("faviconPreview"),
@@ -686,78 +658,6 @@ async function resetData() {
   }
 }
 
-async function loadSettings() {
-  const { settings } = await requestJson<{ settings: PublicSettings }>("/api/settings");
-  setSettingsFormValues(settings);
-}
-
-function setSettingsFormValues(settings: PublicSettings) {
-  setFormValue(elements.siteSettingsForm, "title", settings.site.title);
-  setFormValue(elements.siteSettingsForm, "description", settings.site.description);
-  setFormValue(elements.siteSettingsForm, "url", settings.site.url);
-  setFormValue(elements.siteSettingsForm, "siteName", settings.site.siteName);
-  setFormValue(elements.siteSettingsForm, "ogImage", settings.site.ogImage);
-  setFormValue(elements.siteSettingsForm, "locale", settings.site.locale);
-  setFormValue(elements.siteSettingsForm, "alternateLocale", settings.site.alternateLocale);
-  setFormValue(elements.siteSettingsForm, "twitterCard", settings.site.twitterCard);
-  setFormValue(elements.oidcSettingsForm, "issuerUrl", settings.oidc.issuerUrl);
-  setFormValue(elements.oidcSettingsForm, "clientId", settings.oidc.clientId);
-  setFormValue(elements.oidcSettingsForm, "tokenAuthMethod", settings.oidc.tokenAuthMethod);
-  setFormValue(elements.oidcSettingsForm, "scopes", settings.oidc.scopes);
-  setFormValue(elements.oidcSettingsForm, "allowedEmails", settings.oidc.allowedEmails);
-  setFormValue(elements.oidcSettingsForm, "allowedDomains", settings.oidc.allowedDomains);
-  setFormValue(elements.oidcSettingsForm, "sessionTtlSeconds", String(settings.oidc.sessionTtlSeconds));
-  elements.oidcSecretStatus.textContent = t(settings.oidc.clientSecretConfigured ? "oidcSecretConfigured" : "oidcSecretMissing");
-}
-
-function setFormValue(form: HTMLFormElement, name: string, value: string) {
-  const control = formControl<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(form, name);
-  control.value = value;
-}
-
-async function saveSiteSettings() {
-  const data = new FormData(elements.siteSettingsForm);
-  const { settings } = await requestJson<{ settings: PublicSettings }>("/api/settings", {
-    method: "PATCH",
-    body: JSON.stringify({
-      site: {
-        title: data.get("title"),
-        description: data.get("description"),
-        url: data.get("url"),
-        siteName: data.get("siteName"),
-        ogImage: data.get("ogImage"),
-        locale: data.get("locale"),
-        alternateLocale: data.get("alternateLocale"),
-        twitterCard: data.get("twitterCard")
-      }
-    })
-  });
-  setSettingsFormValues(settings);
-  elements.siteSettingsStatus.textContent = t("settingsSaved");
-  showToast(t("settingsSaved"));
-}
-
-async function saveOidcSettings() {
-  const data = new FormData(elements.oidcSettingsForm);
-  const { settings } = await requestJson<{ settings: PublicSettings }>("/api/settings", {
-    method: "PATCH",
-    body: JSON.stringify({
-      oidc: {
-        issuerUrl: data.get("issuerUrl"),
-        clientId: data.get("clientId"),
-        tokenAuthMethod: data.get("tokenAuthMethod"),
-        scopes: data.get("scopes"),
-        allowedEmails: data.get("allowedEmails"),
-        allowedDomains: data.get("allowedDomains"),
-        sessionTtlSeconds: data.get("sessionTtlSeconds")
-      }
-    })
-  });
-  setSettingsFormValues(settings);
-  elements.oidcSettingsStatus.textContent = t("settingsSaved");
-  showToast(t("settingsSaved"));
-}
-
 async function toggleFavorite(id: string) {
   const bookmark = state.bookmarks.find((item) => item.id === id);
   if (!bookmark) return;
@@ -877,21 +777,10 @@ byId<HTMLButtonElement>("closeImportManager").addEventListener("click", () => el
 byId<HTMLButtonElement>("openSystemSettings").addEventListener("click", () => {
   elements.manager.close();
   elements.systemSettings.showModal();
-  loadSettings().catch(showError);
 });
 byId<HTMLButtonElement>("closeSystemSettings").addEventListener("click", () => elements.systemSettings.close());
 elements.bookmarkHtmlInput.addEventListener("change", () => importBookmarkHtml(elements.bookmarkHtmlInput).catch(showError));
 elements.resetDataButton.addEventListener("click", () => resetData().catch(showError));
-elements.siteSettingsForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  setFormBusy(elements.siteSettingsForm, true);
-  saveSiteSettings().catch(showError).finally(() => setFormBusy(elements.siteSettingsForm, false));
-});
-elements.oidcSettingsForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  setFormBusy(elements.oidcSettingsForm, true);
-  saveOidcSettings().catch(showError).finally(() => setFormBusy(elements.oidcSettingsForm, false));
-});
 elements.folderSelect.addEventListener("change", () => {
   state.folderId = elements.folderSelect.value;
   refresh().catch(showError);

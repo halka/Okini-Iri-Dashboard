@@ -1033,58 +1033,6 @@ dialog::backdrop {
   margin-top: 14px;
 }
 
-.settings-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.settings-form label {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.settings-form .wide,
-.settings-actions,
-.settings-note {
-  grid-column: 1 / -1;
-}
-
-.settings-form textarea {
-  min-height: 80px;
-  resize: vertical;
-}
-
-.settings-note,
-.settings-actions p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.settings-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-}
-
-.settings-actions button {
-  display: inline-grid;
-  place-items: center;
-  min-width: 128px;
-  min-height: 40px;
-  border-radius: var(--radius);
-  padding: 0 14px;
-  font-weight: 800;
-}
-
 .compact-form button {
   display: inline-grid;
   place-items: center;
@@ -1600,16 +1548,13 @@ html[data-color-mode="dark"] .hljs-built_in {
   .account-panel,
   .import-panel,
   .reset-panel,
-  .settings-form,
-  .settings-actions,
   .enhanced-switches {
     grid-template-columns: 1fr;
   }
 
   .file-button,
   .reset-panel button,
-  .account-logout,
-  .settings-actions button {
+  .account-logout {
     width: 100%;
   }
 

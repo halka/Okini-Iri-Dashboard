@@ -29,7 +29,7 @@ npm run rebuild:local
 npm run preview
 ```
 
-Open [http://localhost:8787](http://localhost:8787), then choose **Menu > Import** to load a Chrome bookmark HTML file. OGP and non-secret OIDC settings are available under **Menu > System settings**.
+Open [http://localhost:8787](http://localhost:8787), then choose **Menu > Import** to load a Chrome bookmark HTML file.
 
 ## Using the Dashboard
 
@@ -38,7 +38,7 @@ Open [http://localhost:8787](http://localhost:8787), then choose **Menu > Import
 3. Use search, **All**, **Uncategorized**, a folder, or **Favorites** to narrow the list. Selecting the app title in the header clears active filters and returns to the top.
 4. Bookmark cards always show the URL. Select **Description / notes** for the full text, or **Pretty view** when JSON/XML preview is enabled for that bookmark.
 
-The header menu keeps account information and sign-out controls separate from **Manage folders**, **Manage tags**, **Import**, and **System settings**. System settings contains OGP, optional OIDC, and full-reset controls.
+The header menu keeps account information and sign-out controls separate from **Manage folders**, **Manage tags**, **Import**, and **System settings**. System settings contains the full-reset control.
 
 ## Table of Contents
 
@@ -120,7 +120,7 @@ Store a confidential-client secret with Wrangler:
 npx wrangler secret put OIDC_CLIENT_SECRET
 ```
 
-After you can sign in, open **Menu > System settings** to edit OGP metadata and non-secret OIDC settings from the screen. Worker environment variables still take priority over screen-saved values, so remove a variable from `wrangler.toml` when you want the KV-backed screen value to control that setting. `OIDC_CLIENT_SECRET` always stays in Cloudflare Secrets and is not saved through the browser.
+Worker environment variables take priority over KV-backed OIDC settings. `OIDC_CLIENT_SECRET` always stays in Cloudflare Secrets and is never committed.
 
 ### OIDC settings
 
@@ -334,7 +334,6 @@ Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standa
 - Work across phone, tablet, desktop, and iOS Safari layouts
 - Fully reset all bookmark data stored in D1
 - Optionally authenticate pages and APIs through a configurable OIDC provider
-- Edit OGP metadata and non-secret OIDC settings from **System settings**
 - Restrict access to selected email addresses or email domains
 - End both the local application session and, when supported, the OIDC provider session
 
@@ -343,7 +342,7 @@ Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standa
 - Astro 7 with the Cloudflare adapter
 - Cloudflare Workers
 - Cloudflare D1 for bookmark domain data
-- Cloudflare KV `PREFERENCES` for locale, color-mode, OGP, and non-secret OIDC settings
+- Cloudflare KV `PREFERENCES` for locale, color-mode, OGP metadata, and non-secret OIDC settings
 - Cloudflare KV `SESSION` for Astro's adapter-managed session storage
 - Cloudflare Workers compatibility flag `global_fetch_strictly_public` for outbound fetch hardening
 - `oauth4webapi` for the OIDC Authorization Code flow with PKCE
@@ -354,7 +353,7 @@ Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standa
 ## Configuration
 
 - `src/config/app.ts`: product identity, canonical URL, and outbound User-Agent values
-- `src/config/settings.ts`: OGP defaults and screen-editable OIDC setting contracts
+- `src/config/settings.ts`: OGP defaults and OIDC setting contracts
 - `src/config/preferences.ts`: supported locales, color modes, and defaults
 - `src/i18n/messages.ts`: all visible Japanese and English strings
 - `src/styles/global.css`: light/dark tokens and presentation colors
@@ -376,7 +375,7 @@ src/
 │   ├── kv.ts                Preferences KV binding access only
 │   ├── http.ts              API responses and runtime validation
 │   ├── remote-fetch.ts      Public URL validation and bounded redirects
-│   ├── settings.ts          KV-backed OGP and non-secret OIDC settings
+│   ├── settings.ts          KV-backed app metadata and non-secret OIDC settings
 │   ├── metadata.ts          Remote metadata and favicon retrieval
 │   ├── auth/                OIDC configuration, protocol flow, and session helpers
 │   └── repositories/        D1 queries grouped by domain operation
@@ -393,9 +392,9 @@ src/
 ### Responsibility Boundaries
 
 - D1 stores bookmarks, folders, tags, and their relationships. Schema changes happen only through versioned migrations.
-- `PREFERENCES` KV stores locale, color-mode, OGP, and non-secret OIDC settings. It does not store bookmark records, visual color values, or OIDC client secrets.
+- `PREFERENCES` KV stores locale, color-mode, OGP metadata, and non-secret OIDC settings. It does not store bookmark records, visual color values, or OIDC client secrets.
 - `SESSION` KV stores OIDC transactions, authenticated-user sessions, and the ID token used for provider logout.
-- OIDC client secrets are Worker secrets, never D1 or KV domain records. Environment variables override matching screen-saved OIDC policy settings.
+- OIDC client secrets are Worker secrets, never D1 or KV domain records. Environment variables override matching KV-backed OIDC policy settings.
 - CSS owns theme tokens and presentation. Tag colors are stored with tag records in D1.
 - API routes validate HTTP input and delegate persistence to repositories.
 - Browser modules own UI state and DOM behavior; they do not contain D1 or KV logic.
@@ -426,7 +425,7 @@ The archive field is not part of the current schema. Theme colors are controlled
 | `/api/preview` | `POST` | Fetch up to 1 MiB for JSON/XML preview |
 | `/api/import` | `POST` | Import Chrome bookmark HTML |
 | `/api/preferences` | `GET`, `PATCH` | Read and update KV-backed UI preferences |
-| `/api/settings` | `GET`, `PATCH` | Read and update KV-backed OGP and non-secret OIDC settings |
+| `/api/settings` | `GET`, `PATCH` | Read and update KV-backed app metadata and non-secret OIDC settings |
 | `/api/reset` | `DELETE` | Delete all D1 domain records |
 
 JSON responses use `no-store` and `nosniff` headers. Runtime validation rejects malformed input before repository operations. Deployed responses also set CSP, clickjacking, referrer, cross-origin, HSTS, and cache-control headers; static assets use explicit immutable or revalidation-friendly cache rules.
