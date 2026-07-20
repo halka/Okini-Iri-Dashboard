@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build stage ----
-FROM node:22-slim AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -20,9 +20,17 @@ COPY scripts/ ./scripts/
 RUN npm run build
 
 # ---- Runtime stage ----
-FROM node:22-slim AS runner
+FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
+
+# Keep the runtime trust store current for outbound fetches made by workerd.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && update-ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 # Install the locked runtime dependencies, including Wrangler.
 COPY package.json package-lock.json ./
@@ -32,6 +40,7 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY wrangler.toml ./
 COPY migrations/ ./migrations/
+COPY --chmod=0755 scripts/container-entrypoint.sh /usr/local/bin/container-entrypoint
 
 # Wrangler stores its local D1 / KV state under .wrangler/
 # Mount a named volume here to persist data across container restarts.
@@ -39,6 +48,8 @@ VOLUME ["/app/.wrangler"]
 
 # Wrangler dev listens on 0.0.0.0:8787 by default
 EXPOSE 8787
+
+ENTRYPOINT ["container-entrypoint"]
 
 # Apply local D1 migrations then start the Worker
 # --ip 0.0.0.0  → makes the port reachable from outside the container

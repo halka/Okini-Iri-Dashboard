@@ -4,6 +4,12 @@ dist/
 .wrangler/
 .git/
 .DS_Store
+.env
+.env.*
+!.env.example
+*.crt
+*.key
+*.pem
 npm-debug.log*
 docker-compose.yml
 Dockerfile
