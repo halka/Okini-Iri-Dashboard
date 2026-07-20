@@ -24,8 +24,7 @@ FROM node:22-slim AS runner
 
 WORKDIR /app
 
-# Install wrangler globally so it is available on PATH
-# (re-using the local node_modules is also fine; here we copy them)
+# Install the locked runtime dependencies, including Wrangler.
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
@@ -44,4 +43,5 @@ EXPOSE 8787
 # Apply local D1 migrations then start the Worker
 # --ip 0.0.0.0  → makes the port reachable from outside the container
 # --local        → use local D1 / KV (no Cloudflare account needed)
-CMD ["sh", "-c", "npx wrangler d1 migrations apply bookmark-dashboard --local && npx wrangler dev --ip 0.0.0.0 --local"]
+# Astro generates the Worker entrypoint and assets paths in dist/server/wrangler.json.
+CMD ["sh", "-c", "npx wrangler d1 migrations apply bookmark-dashboard --local && npx wrangler dev --config dist/server/wrangler.json --ip 0.0.0.0 --local"]
