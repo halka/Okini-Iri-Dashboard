@@ -28,14 +28,23 @@ npm run rebuild:local
 npm run preview
 ```
 
-Open [http://localhost:8787](http://localhost:8787), then import a Chrome bookmark HTML file from the management dialog. OGP and non-secret OIDC settings can be edited from the same dialog.
+Open [http://localhost:8787](http://localhost:8787), then choose **Menu > Import** to load a Chrome bookmark HTML file. OGP and non-secret OIDC settings are available under **Menu > System settings**.
+
+## Using the Dashboard
+
+1. Select **Add**, enter a URL, and move focus away from the URL field. The dashboard automatically fetches the resolved URL, title, description, and favicon. Use **Fetch** or **Refetch** only when you want to run that step manually.
+2. Review the fetched fields, choose a folder and tags, then save the bookmark. New folders and color-coded tags can also be created from the editor.
+3. Use search, **All**, **Uncategorized**, a folder, or **Favorites** to narrow the list. Selecting the app title in the header clears active filters and returns to the top.
+4. Bookmark cards always show the URL. Select **Description / notes** for the full text, or **Pretty view** when JSON/XML preview is enabled for that bookmark.
+
+The header menu keeps account information and sign-out controls separate from **Manage folders**, **Manage tags**, **Import**, and **System settings**. System settings contains OGP, optional OIDC, and full-reset controls.
 
 ## Table of Contents
 
 - [Okini Iri Dashboard](#okini-iri-dashboard)
   - [Screenshot](#screenshot)
   - [Quick Start](#quick-start)
-  - [Table of Contents](#table-of-contents)
+  - [Using the Dashboard](#using-the-dashboard)
   - [Requirements](#requirements)
   - [Cloudflare Setup](#cloudflare-setup)
     - [OIDC Setup](#oidc-setup)
@@ -52,7 +61,6 @@ Open [http://localhost:8787](http://localhost:8787), then import a Chrome bookma
   - [Data Model](#data-model)
   - [API Overview](#api-overview)
   - [Author](#author)
-    - [halka](#halka)
   - [LICENSE](#license)
 
 ## Requirements
@@ -108,7 +116,7 @@ Store a confidential-client secret with Wrangler:
 npx wrangler secret put OIDC_CLIENT_SECRET
 ```
 
-After you can sign in, open the management dialog to edit OGP metadata and non-secret OIDC settings from the screen. Worker environment variables still take priority over screen-saved values, so remove a variable from `wrangler.toml` when you want the KV-backed screen value to control that setting. `OIDC_CLIENT_SECRET` always stays in Cloudflare Secrets and is not saved through the browser.
+After you can sign in, open **Menu > System settings** to edit OGP metadata and non-secret OIDC settings from the screen. Worker environment variables still take priority over screen-saved values, so remove a variable from `wrangler.toml` when you want the KV-backed screen value to control that setting. `OIDC_CLIENT_SECRET` always stays in Cloudflare Secrets and is not saved through the browser.
 
 ### OIDC settings
 
@@ -146,15 +154,15 @@ npm run rebuild:local
 npm run preview
 ```
 
-Open [http://localhost:8787](http://localhost:8787). When OIDC is not configured, requests use an authentication-disabled account context. Import a Chrome bookmark HTML file from the management dialog to populate the database.
+Open [http://localhost:8787](http://localhost:8787). When OIDC is not configured, requests use an authentication-disabled account context. Choose **Menu > Import** to populate the database from a Chrome bookmark HTML file.
 
 `rebuild:local` runs the strict Astro checks, creates the Worker build, and applies pending local D1 migrations. It preserves existing local records.
 
 ## Import Behavior
 
-When D1 has no bookmarks and no search or filter is active, the workspace presents a direct Chrome bookmark HTML picker. The management dialog provides the same import control later.
+When D1 has no bookmarks and no search or filter is active, the workspace presents a direct Chrome bookmark HTML picker. The **Import** screen in the header menu provides the same control later.
 
-The importer accepts Chrome `.html` or `.htm` exports up to 10 MiB. UTF-8, Shift_JIS (including Windows-31J), EUC-JP, and ISO-2022-JP input is detected and converted to Unicode before it is sent as UTF-8 JSON. URL metadata and structured preview responses use the same conversion boundary. The importer closes an open management dialog after file selection, shows an indeterminate progress overlay, imports metadata with bounded concurrency, and reloads after success.
+The importer accepts Chrome `.html` or `.htm` exports up to 10 MiB. UTF-8, Shift_JIS (including Windows-31J), EUC-JP, and ISO-2022-JP input is detected and converted to Unicode before it is sent as UTF-8 JSON. URL metadata and structured preview responses use the same conversion boundary. The importer closes the **Import** screen after file selection, shows an indeterminate progress overlay, imports metadata with bounded concurrency, and reloads after success.
 
 The parser excludes Chrome's synthetic root folder named `ブックマーク バー` or `Bookmarks bar`. HTTP(S) bookmarks receive metadata enrichment. `javascript:` and `data:` bookmarklets are retained but are not sent to the metadata or preview fetchers.
 
@@ -194,7 +202,7 @@ Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standa
 - Work across phone, tablet, desktop, and iOS Safari layouts
 - Fully reset all bookmark data stored in D1
 - Optionally authenticate pages and APIs through a configurable OIDC provider
-- Edit OGP metadata and non-secret OIDC settings from the management dialog
+- Edit OGP metadata and non-secret OIDC settings from **System settings**
 - Restrict access to selected email addresses or email domains
 - End both the local application session and, when supported, the OIDC provider session
 
