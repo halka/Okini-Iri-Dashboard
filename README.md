@@ -51,6 +51,7 @@ The header menu keeps account information and sign-out controls separate from **
     - [OIDC settings](#oidc-settings)
   - [Local Development](#local-development)
   - [Docker](#docker)
+  - [Apple Container](#apple-container)
   - [Import Behavior](#import-behavior)
   - [Reset Behavior](#reset-behavior)
   - [Scripts](#scripts)
@@ -210,6 +211,69 @@ environment:
 > [!NOTE]
 > `wrangler dev --local` does not require a Cloudflare account. All D1 and KV bindings are emulated on-disk inside the container.
 
+## Apple Container
+
+For **Apple Silicon Macs (M1 or later)** running **macOS 15 or later**, the dashboard can be run with [Apple Container](https://github.com/apple/container), Apple's native container runtime. Each container runs in its own lightweight VM; no Docker Desktop or daemon is required.
+
+**Prerequisites**
+
+```sh
+# Install the container CLI
+brew install container
+
+# Start the system service (installs a kernel on first run)
+container system start
+```
+
+**Files**
+
+| File | Purpose |
+| --- | --- |
+| `Dockerfile` | Same OCI-compatible image used by Docker — no changes needed |
+| `container-run.sh` | Convenience script that builds the image, creates a named volume, and runs the container |
+
+**Quick start**
+
+```sh
+# Build the image and start the container (first run or after source changes)
+./container-run.sh --build
+
+# Start without rebuilding
+./container-run.sh
+
+# Follow logs
+./container-run.sh logs
+
+# Stop and remove the container
+./container-run.sh stop
+```
+
+Open [http://localhost:8787](http://localhost:8787).
+
+**Data persistence**
+
+A named volume (`okini-iri-wrangler`) is mounted at `/app/.wrangler` inside the container. Wrangler's local D1 database and KV state are written there and persist across container restarts.
+
+**OIDC in Apple Container**
+
+Pass OIDC environment variables with `-e` flags on the `container run` command, or edit `container-run.sh` to add them to the `container run` call:
+
+```sh
+container run \
+  --name okini-iri-dashboard \
+  --detach \
+  -p 8787:8787 \
+  -v okini-iri-wrangler:/app/.wrangler \
+  -e OIDC_ISSUER_URL="https://identity.example.com/" \
+  -e OIDC_CLIENT_ID="bookmark-dashboard" \
+  -e OIDC_CLIENT_SECRET="your-secret" \
+  -e OIDC_ALLOWED_EMAILS="you@example.com" \
+  okini-iri-dashboard
+```
+
+> [!NOTE]
+> Apple Container does not yet support a native compose format. `container-run.sh` serves as the single-container equivalent of `docker compose up`.
+
 ## Import Behavior
 
 When D1 has no bookmarks and no search or filter is active, the workspace presents a direct Chrome bookmark HTML picker. The **Import** screen in the header menu provides the same control later.
@@ -238,6 +302,10 @@ Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standa
 | `docker compose up --build` | Build the Docker image and start the container |
 | `docker compose up` | Start the container without rebuilding the image |
 | `docker compose down` | Stop the container (data is preserved in the named volume) |
+| `./container-run.sh --build` | Build the image and start with Apple Container (Apple Silicon, macOS 15+) |
+| `./container-run.sh` | Start with Apple Container without rebuilding |
+| `./container-run.sh stop` | Stop the Apple Container container |
+| `./container-run.sh logs` | Follow Apple Container logs |
 
 ## Features
 
