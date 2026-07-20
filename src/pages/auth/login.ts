@@ -1,10 +1,11 @@
 import type { APIRoute } from "astro";
-import { AuthConfigurationError, isLoopbackRequest, readOidcConfig } from "../../lib/auth/config";
+import { AuthConfigurationError, readOidcConfig } from "../../lib/auth/config";
 import { authErrorUrl, redirectResponse, safeReturnTo } from "../../lib/auth/http";
-import { createAuthorizationRequest, localDevelopmentUser } from "../../lib/auth/oidc";
+import { createAuthorizationRequest, optionalAuthenticationUser } from "../../lib/auth/oidc";
 import { authTransactionKey, authUserKey, oidcTransactionTtlSeconds, readAuthUser, requireSession } from "../../lib/auth/session";
+import { getKv } from "../../lib/kv";
 
-export const GET: APIRoute = async ({ request, session, url }) => {
+export const GET: APIRoute = async ({ locals, session, url }) => {
   const authSession = requireSession(session);
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
 
@@ -12,11 +13,10 @@ export const GET: APIRoute = async ({ request, session, url }) => {
     const existingUser = await readAuthUser(authSession);
     if (existingUser) return redirectResponse(new URL(returnTo, url));
 
-    const config = readOidcConfig();
+    const config = await readOidcConfig(getKv(locals));
     if (!config) {
-      if (!isLoopbackRequest(request)) return redirectResponse(authErrorUrl(url.origin, "configuration"));
       await authSession.regenerate();
-      authSession.set(authUserKey, localDevelopmentUser());
+      authSession.set(authUserKey, optionalAuthenticationUser());
       return redirectResponse(new URL(returnTo, url));
     }
 

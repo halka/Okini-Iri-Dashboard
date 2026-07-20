@@ -1,4 +1,5 @@
 import { appConfig } from "../config/app";
+import { fetchPublicUrl, publicHttpUrl, type RemoteFetchOptions } from "./remote-fetch";
 import { readResponseText } from "./text-encoding";
 
 export type UrlMetadata = {
@@ -8,8 +9,8 @@ export type UrlMetadata = {
   faviconUrl: string;
 };
 
-export async function fetchUrlMetadata(inputUrl: string): Promise<UrlMetadata> {
-  const url = normalizeHttpUrl(inputUrl);
+export async function fetchUrlMetadata(inputUrl: string, options: RemoteFetchOptions = {}): Promise<UrlMetadata> {
+  const url = publicHttpUrl(inputUrl, options);
   const inputFallback = {
     url: url.href,
     title: url.hostname,
@@ -17,15 +18,15 @@ export async function fetchUrlMetadata(inputUrl: string): Promise<UrlMetadata> {
     faviconUrl: ""
   };
 
-  const response = await fetch(url.href, {
+  const response = await fetchPublicUrl(url, {
     redirect: "follow",
     signal: AbortSignal.timeout(12_000),
     headers: {
       accept: "text/html,application/xhtml+xml",
       "user-agent": appConfig.userAgent
     }
-  });
-  const finalUrl = normalizeResponseUrl(response.url, url);
+  }, options);
+  const finalUrl = normalizeResponseUrl(response.url, url, options);
   const fallback = {
     ...inputFallback,
     url: finalUrl.href,
@@ -33,7 +34,7 @@ export async function fetchUrlMetadata(inputUrl: string): Promise<UrlMetadata> {
   };
   const contentType = response.headers.get("content-type") ?? "";
   if (!response.ok || !contentType.toLowerCase().includes("html")) {
-    return { ...fallback, faviconUrl: await firstExistingIcon(defaultIconCandidates(finalUrl)) };
+    return { ...fallback, faviconUrl: await firstExistingIcon(defaultIconCandidates(finalUrl), options) };
   }
 
   const html = (await readResponseText(response, 512 * 1024)).text.slice(0, 180_000);
@@ -44,7 +45,7 @@ export async function fetchUrlMetadata(inputUrl: string): Promise<UrlMetadata> {
   const faviconUrl = await firstExistingIcon([
     ...findIcons(html).map((icon) => resolveUrl(icon, finalUrl.href)),
     ...defaultIconCandidates(finalUrl)
-  ]);
+  ], options);
 
   return {
     url: finalUrl.href,
@@ -54,16 +55,16 @@ export async function fetchUrlMetadata(inputUrl: string): Promise<UrlMetadata> {
   };
 }
 
-async function urlExists(value: string) {
+async function urlExists(value: string, options: RemoteFetchOptions) {
   try {
-    const response = await fetch(value, {
+    const response = await fetchPublicUrl(value, {
       method: "GET",
       signal: AbortSignal.timeout(6_000),
       headers: {
         accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
         "user-agent": appConfig.userAgent
       }
-    });
+    }, options);
     if (!response.ok) return false;
     const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
     return !contentType || contentType.includes("image") || contentType.includes("icon") || contentType.includes("svg");
@@ -72,20 +73,9 @@ async function urlExists(value: string) {
   }
 }
 
-function normalizeHttpUrl(value: string) {
-  const trimmed = value.trim();
-  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  const parsed = new URL(withProtocol);
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("Only http and https URLs can be fetched");
-  }
-  return parsed;
-}
-
-function normalizeResponseUrl(value: string, fallback: URL) {
+function normalizeResponseUrl(value: string, fallback: URL, options: RemoteFetchOptions) {
   try {
-    const parsed = new URL(value || fallback.href);
-    return ["http:", "https:"].includes(parsed.protocol) ? parsed : fallback;
+    return publicHttpUrl(value || fallback.href, options);
   } catch {
     return fallback;
   }
@@ -122,9 +112,9 @@ function iconPriority(tag: string, preferred: string[]) {
   return index === -1 ? preferred.length : index;
 }
 
-async function firstExistingIcon(candidates: string[]) {
+async function firstExistingIcon(candidates: string[], options: RemoteFetchOptions) {
   const uniqueCandidates = Array.from(new Set(candidates.filter(Boolean)));
-  const results = await Promise.all(uniqueCandidates.map(urlExists));
+  const results = await Promise.all(uniqueCandidates.map((url) => urlExists(url, options)));
   return uniqueCandidates.find((_, index) => results[index]) ?? "";
 }
 

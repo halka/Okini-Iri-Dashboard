@@ -11,10 +11,45 @@ export class ApiError extends Error {
   }
 }
 
-export async function readJson<T>(request: Request): Promise<T> {
+export async function readJson<T>(request: Request, maxBytes = 256 * 1024): Promise<T> {
+  const contentType = request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
+  if (contentType !== "application/json") {
+    throw new ApiError("Content-Type must be application/json", 415, "unsupported_media_type");
+  }
+  const contentLength = request.headers.get("content-length");
+  if (contentLength && Number.isSafeInteger(Number(contentLength)) && Number(contentLength) > maxBytes) {
+    throw new ApiError("Request body is too large", 413, "payload_too_large");
+  }
+
   try {
-    return (await request.json()) as T;
-  } catch {
+    const reader = request.body?.getReader();
+    if (!reader) throw new Error("Request body is missing");
+    const chunks: Uint8Array[] = [];
+    let byteLength = 0;
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+      byteLength += result.value.byteLength;
+      if (byteLength > maxBytes) {
+        await reader.cancel();
+        throw new ApiError("Request body is too large", 413, "payload_too_large");
+      }
+      chunks.push(result.value);
+    }
+
+    const bytes = new Uint8Array(byteLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("JSON body must be an object");
+    }
+    return value as T;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
     throw new ApiError("Invalid JSON body", 400, "invalid_json");
   }
 }
@@ -57,7 +92,7 @@ export function isSupportedBookmarkUrl(url: string) {
   if (!url.trim() || url.length > 65_536 || /[\u0000-\u001f\u007f]/.test(url)) return false;
   try {
     const parsed = new URL(url);
-    return ["http:", "https:", "javascript:", "data:"].includes(parsed.protocol);
+    return ["http:", "https:", "javascript:", "data:"].includes(parsed.protocol) && !parsed.username && !parsed.password;
   } catch {
     return false;
   }
@@ -102,19 +137,59 @@ export function optionalBoolean(value: unknown, field: string) {
   return value;
 }
 
+export function optionalHexColor(value: unknown, field: string) {
+  const text = optionalText(value, field, 7);
+  if (text === undefined) return undefined;
+  if (!/^#[0-9a-fA-F]{6}$/.test(text)) {
+    throw new ApiError(`${field} must be a hex color`, 422, "validation_error");
+  }
+  return text.toLowerCase();
+}
+
 export function optionalStringArray(value: unknown, field: string, maxItems = 100) {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.length > maxItems || value.some((item) => typeof item !== "string")) {
+  if (!Array.isArray(value) || value.length > maxItems || value.some((item) => typeof item !== "string" || item.length > 200)) {
     throw new ApiError(`${field} must be an array of strings`, 422, "validation_error");
   }
-  return [...new Set(value.map((item) => normalizeUtf8Text(item).trim()).filter(Boolean))];
+  const values = [...new Set(value.map((item) => normalizeUtf8Text(item).trim()).filter(Boolean))];
+  if (values.some((item) => !isIdentifier(item))) {
+    throw new ApiError(`${field} must contain valid identifiers`, 422, "validation_error");
+  }
+  return values;
 }
 
 export function optionalNullableId(value: unknown, field: string) {
   if (value === undefined) return undefined;
   if (value === null || value === "") return null;
-  if (typeof value !== "string" || value.length > 200) {
+  if (typeof value !== "string" || value.length > 200 || !isIdentifier(value)) {
     throw new ApiError(`${field} must be a valid identifier`, 422, "validation_error");
   }
   return value;
+}
+
+export function requiredIdentifier(value: string | undefined, field = "id") {
+  if (!value || !isIdentifier(value)) {
+    throw new ApiError(`${field} must be a valid identifier`, 422, "validation_error");
+  }
+  return value;
+}
+
+export function queryIdentifier(value: string | null, field: string) {
+  const identifier = queryText(value, field, 200);
+  if (identifier && !isIdentifier(identifier)) {
+    throw new ApiError(`${field} must be a valid identifier`, 422, "validation_error");
+  }
+  return identifier;
+}
+
+export function queryText(value: string | null, field: string, maxLength = 2_000) {
+  if (value === null) return undefined;
+  if (/[\u0000-\u001f\u007f]/.test(value) || value.length > maxLength) {
+    throw new ApiError(`${field} is invalid`, 422, "validation_error");
+  }
+  return normalizeUtf8Text(value).trim() || undefined;
+}
+
+function isIdentifier(value: string) {
+  return /^[A-Za-z0-9_-]+$/.test(value);
 }

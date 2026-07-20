@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { readAppSettings } from "../settings";
 
 export type OidcTokenAuthMethod = "client_secret_basic" | "client_secret_post" | "none";
 
@@ -40,9 +41,10 @@ function sessionTtl(value: string | undefined) {
   return parsed;
 }
 
-export function readOidcConfig(): OidcConfig | null {
-  const issuerValue = optionalEnv("OIDC_ISSUER_URL");
-  const clientId = optionalEnv("OIDC_CLIENT_ID");
+export async function readOidcConfig(kv?: KVNamespace): Promise<OidcConfig | null> {
+  const settings = kv ? await readAppSettings(kv) : undefined;
+  const issuerValue = optionalEnv("OIDC_ISSUER_URL") || settings?.oidc.issuerUrl;
+  const clientId = optionalEnv("OIDC_CLIENT_ID") || settings?.oidc.clientId;
 
   if (!issuerValue && !clientId) return null;
   if (!issuerValue || !clientId) {
@@ -60,7 +62,7 @@ export function readOidcConfig(): OidcConfig | null {
   }
 
   const clientSecret = optionalEnv("OIDC_CLIENT_SECRET");
-  const configuredMethod = optionalEnv("OIDC_TOKEN_AUTH_METHOD");
+  const configuredMethod = optionalEnv("OIDC_TOKEN_AUTH_METHOD") || settings?.oidc.tokenAuthMethod || undefined;
   const tokenAuthMethod = (configuredMethod ?? (clientSecret ? "client_secret_basic" : "none")) as OidcTokenAuthMethod;
   if (!["client_secret_basic", "client_secret_post", "none"].includes(tokenAuthMethod)) {
     throw new AuthConfigurationError("OIDC_TOKEN_AUTH_METHOD is not supported");
@@ -69,7 +71,7 @@ export function readOidcConfig(): OidcConfig | null {
     throw new AuthConfigurationError("OIDC_CLIENT_SECRET is required for the configured token authentication method");
   }
 
-  const scopeSet = new Set((optionalEnv("OIDC_SCOPES") ?? "openid profile email").split(/\s+/).filter(Boolean));
+  const scopeSet = new Set((optionalEnv("OIDC_SCOPES") || settings?.oidc.scopes || "openid profile email").split(/\s+/).filter(Boolean));
   scopeSet.add("openid");
 
   return {
@@ -78,9 +80,9 @@ export function readOidcConfig(): OidcConfig | null {
     clientSecret,
     tokenAuthMethod,
     scopes: [...scopeSet].join(" "),
-    allowedEmails: commaSeparated(optionalEnv("OIDC_ALLOWED_EMAILS")),
-    allowedDomains: new Set([...commaSeparated(optionalEnv("OIDC_ALLOWED_DOMAINS"))].map((domain) => domain.replace(/^@/, ""))),
-    sessionTtlSeconds: sessionTtl(optionalEnv("AUTH_SESSION_TTL_SECONDS"))
+    allowedEmails: commaSeparated(optionalEnv("OIDC_ALLOWED_EMAILS") || settings?.oidc.allowedEmails),
+    allowedDomains: new Set([...commaSeparated(optionalEnv("OIDC_ALLOWED_DOMAINS") || settings?.oidc.allowedDomains)].map((domain) => domain.replace(/^@/, ""))),
+    sessionTtlSeconds: sessionTtl(optionalEnv("AUTH_SESSION_TTL_SECONDS") || settings?.oidc.sessionTtlSeconds.toString())
   };
 }
 

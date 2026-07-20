@@ -19,7 +19,12 @@ const { t, preferences, title, description, actionHref, actionLabel } = Astro.pr
 ---
 
 <!doctype html>
-<html lang={preferences.locale}>
+<html
+  lang={preferences.locale}
+  data-locale={preferences.locale}
+  data-theme-preference={preferences.colorMode}
+  data-color-mode={preferences.colorMode === "dark" ? "dark" : "light"}
+>
   <AppHead t={t} preferences={preferences} />
   <body class="auth-body">
     <main class="auth-screen">

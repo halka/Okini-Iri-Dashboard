@@ -18,7 +18,8 @@ export function mapFolder(row: D1Row): Folder {
 export function mapTag(row: D1Row): Tag {
   return {
     id: String(row.id),
-    name: String(row.name)
+    name: String(row.name),
+    primaryColor: String(row.primary_color ?? "#4f8cff")
   };
 }
 

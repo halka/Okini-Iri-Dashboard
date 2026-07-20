@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { AuthConfigurationError, readOidcConfig } from "../../lib/auth/config";
 import { authErrorUrl, redirectResponse } from "../../lib/auth/http";
 import { AuthAccessDeniedError, exchangeAuthorizationCode } from "../../lib/auth/oidc";
+import { getKv } from "../../lib/kv";
 import {
   authIdTokenKey,
   authTransactionKey,
@@ -11,7 +12,7 @@ import {
   requireSession
 } from "../../lib/auth/session";
 
-export const GET: APIRoute = async ({ session, url }) => {
+export const GET: APIRoute = async ({ locals, session, url }) => {
   const authSession = requireSession(session);
   const transaction = await readOidcTransaction(authSession);
   authSession.delete(authTransactionKey);
@@ -21,7 +22,7 @@ export const GET: APIRoute = async ({ session, url }) => {
   }
 
   try {
-    const config = readOidcConfig();
+    const config = await readOidcConfig(getKv(locals));
     if (!config) return redirectResponse(authErrorUrl(url.origin, "configuration"));
 
     const callbackUrl = new URL("/auth/callback", url).href;

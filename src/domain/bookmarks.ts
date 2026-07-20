@@ -1,6 +1,7 @@
 export type Tag = {
   id: string;
   name: string;
+  primaryColor: string;
 };
 
 export const UNCATEGORIZED_FOLDER_FILTER_ID = "__uncategorized";

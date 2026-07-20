@@ -1,7 +1,9 @@
 ---
-import { siteMeta } from "../config/site";
 import type { Preferences } from "../config/preferences";
 import type { defaultLocale, messages } from "../i18n/messages";
+import { getKv } from "../lib/kv";
+import { absoluteSiteUrl, readAppSettings } from "../lib/settings";
+import { defaultAppSettings } from "../config/settings";
 
 type Copy = (typeof messages)[typeof defaultLocale];
 
@@ -10,8 +12,11 @@ interface Props {
   preferences: Preferences;
 }
 
-const { t, preferences } = Astro.props;
-const ogImageUrl = new URL(siteMeta.ogImage, siteMeta.url).href;
+const { t } = Astro.props;
+const settings = await readAppSettings(getKv(Astro.locals)).catch(() => defaultAppSettings);
+const site = settings.site;
+const siteUrl = absoluteSiteUrl(site.url);
+const ogImageUrl = new URL(site.ogImage, siteUrl).href;
 ---
 
 <head>
@@ -21,33 +26,21 @@ const ogImageUrl = new URL(siteMeta.ogImage, siteMeta.url).href;
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="" />
-  <meta name="description" content={t.metaDescription || siteMeta.description} />
-  <meta property="og:title" content={siteMeta.title} />
-  <meta property="og:description" content={siteMeta.description} />
-  <meta property="og:type" content={siteMeta.ogType} />
-  <meta property="og:url" content={siteMeta.url} />
-  <meta property="og:site_name" content={siteMeta.siteName} />
+  <meta name="description" content={site.description || t.metaDescription} />
+  <meta property="og:title" content={site.title} />
+  <meta property="og:description" content={site.description} />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content={siteUrl} />
+  <meta property="og:site_name" content={site.siteName} />
   <meta property="og:image" content={ogImageUrl} />
-  <meta property="og:locale" content={siteMeta.locale} />
-  <meta property="og:locale:alternate" content={siteMeta.alternateLocale} />
-  <meta name="twitter:card" content={siteMeta.twitterCard} />
-  <meta name="twitter:title" content={siteMeta.title} />
-  <meta name="twitter:description" content={siteMeta.description} />
+  <meta property="og:locale" content={site.locale} />
+  <meta property="og:locale:alternate" content={site.alternateLocale} />
+  <meta name="twitter:card" content={site.twitterCard} />
+  <meta name="twitter:title" content={site.title} />
+  <meta name="twitter:description" content={site.description} />
   <meta name="twitter:image" content={ogImageUrl} />
-  <title>{t.appTitle}</title>
-  <link rel="canonical" href={siteMeta.url} />
+  <title>{site.title || t.appTitle}</title>
+  <link rel="canonical" href={siteUrl} />
   <link rel="icon" href="/favicon.svg" />
-  <script is:inline define:vars={{ preferences }}>
-    const storedMode = preferences.colorMode;
-    const storedLocale = preferences.locale;
-    const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.dataset.themePreference = storedMode;
-    document.documentElement.dataset.colorMode = storedMode === "system" ? (systemDark ? "dark" : "light") : storedMode;
-    document.documentElement.dataset.locale = storedLocale;
-    document.documentElement.lang = storedLocale;
-    requestAnimationFrame(() => {
-      const themeColor = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
-      document.querySelector("meta[name='theme-color']")?.setAttribute("content", themeColor);
-    });
-  </script>
+  <script is:inline src="/theme-boot.js"></script>
 </head>

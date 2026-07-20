@@ -1,6 +1,7 @@
 import type { ChromeBookmarksImport } from "../../domain/bookmarks";
 import { isSupportedBookmarkUrl } from "../http";
 import { fetchUrlMetadata } from "../metadata";
+import type { RemoteFetchOptions } from "../remote-fetch";
 import { resetAllData } from "./reset";
 
 type NormalizedFolder = {
@@ -23,14 +24,23 @@ type NormalizedBookmark = {
 
 const IMPORT_CONCURRENCY = 6;
 
-export async function importChromeBookmarks(db: D1Database, input: ChromeBookmarksImport, force = false) {
+export async function importChromeBookmarks(
+  db: D1Database,
+  input: ChromeBookmarksImport,
+  force = false,
+  remoteFetchOptions: RemoteFetchOptions = {}
+) {
   const current = await db.prepare("SELECT COUNT(*) AS count FROM bookmarks").first<{ count: number }>();
   if (!force && (current?.count ?? 0) > 0) {
     return { skipped: true, folders: 0, bookmarks: 0 };
   }
 
   const normalized = normalizeImportedBookmarks(input);
-  const enrichedBookmarks = await mapConcurrent(normalized.bookmarks, IMPORT_CONCURRENCY, enrichBookmark);
+  const enrichedBookmarks = await mapConcurrent(
+    normalized.bookmarks,
+    IMPORT_CONCURRENCY,
+    (bookmark) => enrichBookmark(bookmark, remoteFetchOptions)
+  );
 
   if (force) await resetAllData(db);
 
@@ -122,13 +132,13 @@ function normalizeImportedBookmarks(input: ChromeBookmarksImport) {
   return { folders, bookmarks };
 }
 
-async function enrichBookmark(bookmark: NormalizedBookmark): Promise<NormalizedBookmark> {
+async function enrichBookmark(bookmark: NormalizedBookmark, remoteFetchOptions: RemoteFetchOptions): Promise<NormalizedBookmark> {
   if (!/^https?:\/\//i.test(bookmark.url)) {
     return { ...bookmark, title: bookmark.title || safeImportedTitle(bookmark.url), faviconUrl: "" };
   }
 
   try {
-    const metadata = await fetchUrlMetadata(bookmark.url);
+    const metadata = await fetchUrlMetadata(bookmark.url, remoteFetchOptions);
     return {
       ...bookmark,
       title: metadata.title || bookmark.title || safeImportedTitle(bookmark.url),

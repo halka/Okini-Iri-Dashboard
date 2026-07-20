@@ -10,7 +10,8 @@ import {
   optionalNullableId,
   optionalStringArray,
   optionalText,
-  readJson
+  readJson,
+  requiredIdentifier
 } from "../../../lib/http";
 
 type Payload = {
@@ -26,7 +27,7 @@ type Payload = {
 };
 
 export const GET: APIRoute = apiRoute(async ({ locals, params }) => {
-  const bookmark = await getBookmark(getDb(locals), params.id ?? "");
+  const bookmark = await getBookmark(getDb(locals), requiredIdentifier(params.id));
   return bookmark ? json({ bookmark }) : json({ error: "not found" }, 404);
 });
 
@@ -38,7 +39,7 @@ export const PATCH: APIRoute = apiRoute(async ({ locals, params, request }) => {
   if (url !== undefined && !isSupportedBookmarkUrl(url)) {
     throw new ApiError("A supported URL is required", 422, "validation_error");
   }
-  const updated = await updateBookmark(getDb(locals), params.id ?? "", {
+  const updated = await updateBookmark(getDb(locals), requiredIdentifier(params.id), {
     title,
     url,
     folderId: optionalNullableId(body.folderId, "folderId"),
@@ -53,6 +54,6 @@ export const PATCH: APIRoute = apiRoute(async ({ locals, params, request }) => {
 });
 
 export const DELETE: APIRoute = apiRoute(async ({ locals, params }) => {
-  const deleted = await deleteBookmark(getDb(locals), params.id ?? "");
+  const deleted = await deleteBookmark(getDb(locals), requiredIdentifier(params.id));
   return deleted ? json({ ok: true }) : json({ error: "not found" }, 404);
 });

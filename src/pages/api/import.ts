@@ -8,7 +8,7 @@ import { normalizeUtf8Text } from "../../lib/text-encoding";
 type Payload = { force?: boolean; html?: string; source?: string };
 
 export const POST: APIRoute = apiRoute(async ({ locals, request }) => {
-  const body = await readJson<Payload>(request);
+  const body = await readJson<Payload>(request, 11 * 1024 * 1024);
   const force = optionalBoolean(body.force, "force") ?? false;
   if (typeof body.html !== "string" || !body.html.trim()) {
     throw new ApiError("Chrome bookmark HTML is required", 422, "validation_error");
@@ -25,6 +25,8 @@ export const POST: APIRoute = apiRoute(async ({ locals, request }) => {
   if (!parsedBookmarks.bookmarks?.length && !parsedBookmarks.folders?.length) {
     throw new ApiError("The Chrome bookmark HTML export is empty", 422, "invalid_bookmark_html");
   }
-  const result = await importChromeBookmarks(getDb(locals), parsedBookmarks, force);
+  const result = await importChromeBookmarks(getDb(locals), parsedBookmarks, force, {
+    blockedOrigins: new Set([new URL(request.url).origin])
+  });
   return json(result);
 });

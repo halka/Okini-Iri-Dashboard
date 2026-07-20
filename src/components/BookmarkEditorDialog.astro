@@ -10,7 +10,7 @@ interface Props {
 const { t } = Astro.props;
 ---
 
-<dialog id="editor" aria-labelledby="editorTitle">
+<dialog id="editor" aria-labelledby="editorTitle" aria-describedby="metadataStatus">
   <form id="bookmarkForm" method="dialog" class="editor-form">
     <input type="hidden" name="id" />
     <input type="hidden" name="faviconUrl" />
@@ -25,7 +25,7 @@ const { t } = Astro.props;
     </label>
     <div class="metadata-row">
       <div id="faviconPreview" class="favicon preview-favicon"></div>
-      <p id="metadataStatus" data-i18n="metadataIdle">{t.metadataIdle}</p>
+      <p id="metadataStatus" role="status" aria-live="polite" data-i18n="metadataIdle">{t.metadataIdle}</p>
       <button id="fetchMetadataButton" type="button" data-i18n="refetch">{t.refetch}</button>
     </div>
     <label>
@@ -53,6 +53,7 @@ const { t } = Astro.props;
       <select id="editorTags" class="editor-tags" name="tagIds" size="5" multiple></select>
       <div id="inlineTagForm" class="inline-tag-form">
         <input name="name" type="text" aria-label={t.addTagPlaceholder} maxlength="100" placeholder={t.addTagPlaceholder} data-i18n-placeholder="addTagPlaceholder" data-i18n-aria-label="addTagPlaceholder" />
+        <input name="primaryColor" type="color" value="#4f8cff" aria-label={t.tagColor} data-i18n-aria-label="tagColor" />
         <button type="button" data-i18n="add">{t.add}</button>
       </div>
     </fieldset>

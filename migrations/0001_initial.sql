@@ -1,3 +1,7 @@
+-- Current initial schema for a fresh Okini Iri Dashboard database.
+-- This migration intentionally includes the final shape from the previous
+-- migration history.
+
 CREATE TABLE IF NOT EXISTS folders (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -15,8 +19,9 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   folder_id TEXT,
   description TEXT NOT NULL DEFAULT '',
   notes TEXT NOT NULL DEFAULT '',
+  favicon_url TEXT NOT NULL DEFAULT '',
   favorite INTEGER NOT NULL DEFAULT 0,
-  archived INTEGER NOT NULL DEFAULT 0,
+  structured_preview_enabled INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 0,
   add_date INTEGER,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -27,6 +32,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 CREATE TABLE IF NOT EXISTS tags (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
+  primary_color TEXT NOT NULL DEFAULT '#F172A3',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

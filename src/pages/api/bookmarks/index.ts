@@ -10,6 +10,8 @@ import {
   optionalNullableId,
   optionalStringArray,
   optionalText,
+  queryIdentifier,
+  queryText,
   readJson,
   requiredText
 } from "../../../lib/http";
@@ -27,10 +29,14 @@ type Payload = {
 };
 
 export const GET: APIRoute = apiRoute(async ({ locals, url }) => {
+  const favoriteValue = queryText(url.searchParams.get("favorite"), "favorite");
+  if (favoriteValue && favoriteValue !== "true" && favoriteValue !== "false") {
+    throw new ApiError("favorite is invalid", 422, "validation_error");
+  }
   const bookmarks = await listBookmarks(getDb(locals), {
-    query: url.searchParams.get("q")?.trim() || undefined,
-    folderId: url.searchParams.get("folderId") || undefined,
-    favorite: url.searchParams.get("favorite") === "true"
+    query: queryText(url.searchParams.get("q"), "q"),
+    folderId: queryIdentifier(url.searchParams.get("folderId"), "folderId"),
+    favorite: favoriteValue === "true"
   });
   return json({ bookmarks });
 });

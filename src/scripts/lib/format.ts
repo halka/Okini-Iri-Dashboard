@@ -9,6 +9,15 @@ export function safeHost(url: string) {
   }
 }
 
+export function isHttpBookmarkUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    return ["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
+}
+
 export function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 }
@@ -22,8 +31,9 @@ export function faviconHtml(bookmark: Bookmark) {
 }
 
 export function faviconMarkup(faviconUrl: string, title: string) {
-  const fallback = `<span${faviconUrl ? " hidden" : ""}>${escapeHtml(firstInitial(title))}</span>`;
-  return faviconUrl ? `<img src="${escapeAttribute(faviconUrl)}" alt="" loading="lazy" />${fallback}` : fallback;
+  const safeFaviconUrl = isHttpBookmarkUrl(faviconUrl) ? faviconUrl : "";
+  const fallback = `<span${safeFaviconUrl ? " hidden" : ""}>${escapeHtml(firstInitial(title))}</span>`;
+  return safeFaviconUrl ? `<img src="${escapeAttribute(safeFaviconUrl)}" alt="" loading="lazy" />${fallback}` : fallback;
 }
 
 export function setupFaviconFallbacks(images: Iterable<HTMLImageElement>) {

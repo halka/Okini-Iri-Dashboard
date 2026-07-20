@@ -6,7 +6,7 @@ const bookmarkSelect = `
     b.favicon_url, b.favorite, b.structured_preview_enabled, b.sort_order, b.add_date, b.created_at, b.updated_at,
     COALESCE(
       json_group_array(
-        CASE WHEN t.id IS NULL THEN NULL ELSE json_object('id', t.id, 'name', t.name) END
+        CASE WHEN t.id IS NULL THEN NULL ELSE json_object('id', t.id, 'name', t.name, 'primaryColor', t.primary_color) END
       ),
       '[]'
     ) AS tags_json

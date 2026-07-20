@@ -17,7 +17,12 @@ if (!user) throw new Error("Authenticated user is unavailable");
 ---
 
 <!doctype html>
-<html lang={preferences.locale}>
+<html
+  lang={preferences.locale}
+  data-locale={preferences.locale}
+  data-theme-preference={preferences.colorMode}
+  data-color-mode={preferences.colorMode === "dark" ? "dark" : "light"}
+>
   <AppHead t={t} preferences={preferences} />
   <body>
     <AppShell t={t} />

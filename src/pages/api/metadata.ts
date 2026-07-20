@@ -13,7 +13,7 @@ export const POST: APIRoute = apiRoute(async ({ request }) => {
   if (!isHttpUrl(url)) throw new ApiError("An HTTP or HTTPS URL is required", 422, "validation_error");
 
   try {
-    const metadata = await fetchUrlMetadata(url);
+    const metadata = await fetchUrlMetadata(url, { blockedOrigins: new Set([new URL(request.url).origin]) });
     return json({ metadata });
   } catch (error) {
     throw new ApiError(error instanceof Error ? error.message : "metadata fetch failed", 422, "metadata_fetch_failed");

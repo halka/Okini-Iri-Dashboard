@@ -4,7 +4,7 @@ import type { Locale, MessageKey } from "../i18n/messages";
 import { readTextBlob, UnsupportedTextEncodingError } from "../lib/text-encoding";
 import { requestJson } from "./lib/api-client";
 import { byId, formControl } from "./lib/dom";
-import { escapeAttribute, escapeHtml, faviconHtml, faviconMarkup, safeHost, setupFaviconFallbacks } from "./lib/format";
+import { escapeAttribute, escapeHtml, faviconHtml, faviconMarkup, isHttpBookmarkUrl, safeHost, setupFaviconFallbacks } from "./lib/format";
 import { I18nController } from "./lib/i18n-controller";
 import { formatStructuredText, renderHighlightedPreview } from "./lib/structured-preview";
 import { ThemeController } from "./lib/theme-controller";
@@ -18,6 +18,29 @@ type DashboardState = {
   favoriteOnly: boolean;
 };
 
+type PublicSettings = {
+  site: {
+    title: string;
+    description: string;
+    url: string;
+    siteName: string;
+    ogImage: string;
+    locale: string;
+    alternateLocale: string;
+    twitterCard: "summary" | "summary_large_image";
+  };
+  oidc: {
+    issuerUrl: string;
+    clientId: string;
+    tokenAuthMethod: "" | "client_secret_basic" | "client_secret_post" | "none";
+    scopes: string;
+    allowedEmails: string;
+    allowedDomains: string;
+    sessionTtlSeconds: number;
+    clientSecretConfigured: boolean;
+  };
+};
+
 const state: DashboardState = {
   bookmarks: [],
   folders: [],
@@ -29,10 +52,12 @@ const state: DashboardState = {
 
 const elements = {
   bookmarkList: byId<HTMLElement>("bookmarkList"),
+  workspaceStatus: byId<HTMLElement>("workspaceStatus"),
   workspace: byId<HTMLElement>("workspace"),
   folderSelect: byId<HTMLSelectElement>("folderSelect"),
   searchInput: byId<HTMLInputElement>("searchInput"),
   favoriteOnlyButton: byId<HTMLButtonElement>("favoriteOnly"),
+  homeFilterButton: byId<HTMLButtonElement>("homeFilterButton"),
   newButton: byId<HTMLButtonElement>("newButton"),
   moveToTopButton: byId<HTMLButtonElement>("moveToTopButton"),
   languageButton: byId<HTMLButtonElement>("languageButton"),
@@ -44,10 +69,19 @@ const elements = {
   editorTags: byId<HTMLSelectElement>("editorTags"),
   deleteButton: byId<HTMLButtonElement>("deleteButton"),
   manager: byId<HTMLDialogElement>("manager"),
+  folderManager: byId<HTMLDialogElement>("folderManager"),
+  tagManager: byId<HTMLDialogElement>("tagManager"),
+  importManager: byId<HTMLDialogElement>("importManager"),
+  systemSettings: byId<HTMLDialogElement>("systemSettings"),
   folderManageList: byId<HTMLElement>("folderManageList"),
   tagManageList: byId<HTMLElement>("tagManageList"),
   bookmarkHtmlInput: byId<HTMLInputElement>("bookmarkHtmlInput"),
   resetDataButton: byId<HTMLButtonElement>("resetDataButton"),
+  siteSettingsForm: byId<HTMLFormElement>("siteSettingsForm"),
+  siteSettingsStatus: byId<HTMLElement>("siteSettingsStatus"),
+  oidcSettingsForm: byId<HTMLFormElement>("oidcSettingsForm"),
+  oidcSettingsStatus: byId<HTMLElement>("oidcSettingsStatus"),
+  oidcSecretStatus: byId<HTMLElement>("oidcSecretStatus"),
   importOverlay: byId<HTMLElement>("importOverlay"),
   metadataStatus: byId<HTMLElement>("metadataStatus"),
   faviconPreview: byId<HTMLElement>("faviconPreview"),
@@ -58,6 +92,11 @@ const elements = {
   previewTitle: byId<HTMLElement>("previewTitle"),
   previewStatus: byId<HTMLElement>("previewStatus"),
   previewContent: byId<HTMLElement>("previewContent"),
+  bookmarkDetailsDialog: byId<HTMLDialogElement>("bookmarkDetailsDialog"),
+  bookmarkDetailsTitle: byId<HTMLElement>("bookmarkDetailsTitle"),
+  bookmarkDetailsUrl: byId<HTMLAnchorElement>("bookmarkDetailsUrl"),
+  bookmarkDetailsDescription: byId<HTMLElement>("bookmarkDetailsDescription"),
+  bookmarkDetailsNotes: byId<HTMLElement>("bookmarkDetailsNotes"),
   previewLinkDialog: byId<HTMLDialogElement>("previewLinkDialog"),
   previewLinkUrl: byId<HTMLElement>("previewLinkUrl"),
   openPreviewLinkExternal: byId<HTMLButtonElement>("openPreviewLinkExternal"),
@@ -73,7 +112,9 @@ let pendingPreviewUrl = "";
 let refreshSequence = 0;
 let searchTimer = 0;
 let toastTimer = 0;
+let metadataTimer = 0;
 let metadataController: AbortController | null = null;
+let lastMetadataUrl = "";
 let preferenceSaveQueue = Promise.resolve();
 
 async function savePreferences(input: Partial<{ locale: Locale; colorMode: ColorMode }>) {
@@ -115,6 +156,7 @@ function syncOpenDialogLocale() {
 async function refresh() {
   const sequence = ++refreshSequence;
   elements.bookmarkList.setAttribute("aria-busy", "true");
+  elements.workspaceStatus.textContent = t("loading");
   const params = new URLSearchParams();
   if (state.query) params.set("q", state.query);
   if (state.folderId && !state.query && !state.favoriteOnly) params.set("folderId", state.folderId);
@@ -132,6 +174,9 @@ async function refresh() {
     state.tags = tags;
     if (state.folderId && state.folderId !== UNCATEGORIZED_FOLDER_FILTER_ID && !folders.some((folder) => folder.id === state.folderId)) state.folderId = "";
     render();
+  } catch (error) {
+    elements.workspaceStatus.textContent = error instanceof Error ? error.message : t("genericError");
+    throw error;
   } finally {
     if (sequence === refreshSequence) elements.bookmarkList.setAttribute("aria-busy", "false");
   }
@@ -160,15 +205,34 @@ function renderFavoriteFilter() {
   elements.favoriteOnlyButton.setAttribute("aria-pressed", String(state.favoriteOnly));
 }
 
+function scrollWorkspaceToTop() {
+  elements.workspace.scrollTop = 0;
+  elements.workspace.scrollTo({ top: 0, behavior: "smooth" });
+  elements.moveToTopButton.hidden = true;
+}
+
+async function resetFilters() {
+  state.folderId = "";
+  state.query = "";
+  state.favoriteOnly = false;
+  elements.folderSelect.value = "";
+  elements.searchInput.value = "";
+  renderFavoriteFilter();
+  await refresh();
+  requestAnimationFrame(scrollWorkspaceToTop);
+}
+
 function renderManager() {
   elements.folderManageList.innerHTML = state.folders.length
     ? state.folders
         .map(
-          (folder) => `<article class="manage-row">
-            <div>
-              <strong>${escapeHtml(folderLabel(folder))}</strong>
-              <span>${escapeHtml(folderUsageLabel(folder))}</span>
-            </div>
+          (folder) => `<article class="manage-row folder-manage-row" data-folder-id="${escapeAttribute(folder.id)}">
+            <label>
+              <span class="visually-hidden">${escapeHtml(t("newFolderPlaceholder"))}</span>
+              <input name="name" type="text" value="${escapeAttribute(folder.name)}" maxlength="200" />
+            </label>
+            <span>${escapeHtml(folderUsageLabel(folder))}</span>
+            <button type="button" data-save-folder="${escapeAttribute(folder.id)}">${escapeHtml(t("save"))}</button>
             <button type="button" class="danger" data-delete-folder="${escapeAttribute(folder.id)}">${escapeHtml(t("delete"))}</button>
           </article>`
         )
@@ -178,8 +242,16 @@ function renderManager() {
   elements.tagManageList.innerHTML = state.tags.length
     ? state.tags
         .map(
-          (tag) => `<article class="manage-row">
-            <div><strong><span class="tag-dot" aria-hidden="true"></span>${escapeHtml(tag.name)}</strong></div>
+          (tag) => `<article class="manage-row tag-manage-row" data-tag-id="${escapeAttribute(tag.id)}">
+            <label>
+              <span class="visually-hidden">${escapeHtml(t("tagNamePlaceholder"))}</span>
+              <input name="name" type="text" value="${escapeAttribute(tag.name)}" maxlength="100" />
+            </label>
+            <label class="color-control">
+              <span class="visually-hidden">${escapeHtml(t("tagColor"))}</span>
+              <input name="primaryColor" type="color" value="${escapeAttribute(tag.primaryColor)}" />
+            </label>
+            <button type="button" data-save-tag="${escapeAttribute(tag.id)}">${escapeHtml(t("save"))}</button>
             <button type="button" class="danger" data-delete-tag="${escapeAttribute(tag.id)}">${escapeHtml(t("delete"))}</button>
           </article>`
         )
@@ -188,6 +260,11 @@ function renderManager() {
 }
 
 function renderBookmarks() {
+  elements.workspaceStatus.textContent = state.bookmarks.length
+    ? t("linksFound", { count: state.bookmarks.length })
+    : state.query || state.folderId || state.favoriteOnly
+      ? t("noLinks")
+      : t("importBookmarks");
   if (!state.bookmarks.length) {
     const isUnfilteredView = !state.query && !state.folderId && !state.favoriteOnly;
     elements.bookmarkList.innerHTML = isUnfilteredView
@@ -206,16 +283,35 @@ function renderBookmarks() {
 
   elements.bookmarkList.innerHTML = state.bookmarks
     .map((bookmark) => {
-      const tags = bookmark.tags.map((tag) => `<span class="pill">${escapeHtml(tag.name)}</span>`).join("");
-      return `<article class="bookmark-card">
-        <a class="card-main" href="${escapeAttribute(bookmark.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="${escapeAttribute(t("openLinkLabel", { title: bookmark.title }))}">
+      const isOpenable = isHttpBookmarkUrl(bookmark.url);
+      const tags = bookmark.tags
+        .map((tag) => `<span class="pill tag-pill" style="--tag-color: ${escapeAttribute(tag.primaryColor)}">${escapeHtml(tag.name)}</span>`)
+        .join("");
+      const previewAction =
+        bookmark.structuredPreviewEnabled && isOpenable
+          ? `<button type="button" class="ghost-link preview-link card-top-action" data-preview="${escapeAttribute(bookmark.id)}">${escapeHtml(t("structuredPreview"))}</button>`
+          : "";
+      const main = isOpenable
+        ? `<a class="card-main" href="${escapeAttribute(bookmark.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="${escapeAttribute(t("openLinkLabel", { title: bookmark.title }))}">
           ${faviconHtml(bookmark)}
           <div>
             <h3>${escapeHtml(bookmark.title)}</h3>
             <span class="card-host">${escapeHtml(safeHost(bookmark.url))}</span>
           </div>
-        </a>
-        <p>${escapeHtml(bookmark.description || bookmark.notes || bookmark.url)}</p>
+        </a>`
+        : `<div class="card-main" role="group">
+          ${faviconHtml(bookmark)}
+          <div>
+            <h3>${escapeHtml(bookmark.title)}</h3>
+            <span class="card-host">${escapeHtml(safeHost(bookmark.url))}</span>
+          </div>
+        </div>`;
+      return `<article class="bookmark-card">
+        <div class="card-top">
+          ${main}
+          ${previewAction}
+        </div>
+        <p class="card-url">${escapeHtml(bookmark.url)}</p>
         <div class="card-meta">
           <span>${escapeHtml(bookmark.folderName ?? t("uncategorized"))}</span>
           <button type="button" class="favorite-toggle${bookmark.favorite ? " is-active" : ""}" data-favorite="${escapeAttribute(bookmark.id)}" aria-label="${escapeAttribute(t(bookmark.favorite ? "removeFavorite" : "addFavorite"))}" title="${escapeAttribute(t(bookmark.favorite ? "removeFavorite" : "addFavorite"))}">${bookmark.favorite ? "★" : "☆"}</button>
@@ -223,7 +319,7 @@ function renderBookmarks() {
         <div class="card-footer">
           <div class="pill-row">${tags}</div>
           <div class="card-actions">
-            ${bookmark.structuredPreviewEnabled ? `<button type="button" class="ghost-link" data-preview="${escapeAttribute(bookmark.id)}">${escapeHtml(t("structuredPreview"))}</button>` : ""}
+            <button type="button" class="ghost-link" data-details="${escapeAttribute(bookmark.id)}">${escapeHtml(t("descriptionNotes"))}</button>
             <button type="button" class="edit-link" data-edit="${escapeAttribute(bookmark.id)}">${escapeHtml(t("edit"))}</button>
           </div>
         </div>
@@ -296,6 +392,8 @@ function openEditor(bookmark?: Bookmark) {
   formControl<HTMLInputElement>(elements.form, "structuredPreviewEnabled").checked = Boolean(bookmark?.structuredPreviewEnabled);
   renderEditorTags(new Set(bookmark?.tags.map((tag) => tag.id) ?? []));
   updateFaviconPreview(bookmark?.faviconUrl ?? "", bookmark?.title ?? "");
+  lastMetadataUrl = bookmark?.url ?? "";
+  updateMetadataButton(Boolean(bookmark));
   setMetadataStatus(bookmark ? t("metadataSaved") : t("metadataIdle"));
   elements.editor.showModal();
   requestAnimationFrame(() => formControl<HTMLInputElement>(elements.form, "url").focus());
@@ -323,6 +421,7 @@ async function fillMetadata(force = false) {
   const faviconInput = formControl<HTMLInputElement>(elements.form, "faviconUrl");
   const url = urlInput.value.trim();
   if (!url) return;
+  if (!force && lastMetadataUrl === url) return;
 
   metadataController?.abort();
   metadataController = new AbortController();
@@ -338,6 +437,8 @@ async function fillMetadata(force = false) {
     if (force || !descriptionInput.value.trim()) descriptionInput.value = metadata.description;
     faviconInput.value = metadata.faviconUrl;
     updateFaviconPreview(metadata.faviconUrl, titleInput.value);
+    lastMetadataUrl = metadata.url;
+    updateMetadataButton(true);
     setMetadataStatus(t("metadataLoaded"));
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return;
@@ -353,6 +454,10 @@ function setMetadataStatus(message: string) {
   elements.metadataStatus.textContent = message;
 }
 
+function updateMetadataButton(hasMetadata: boolean) {
+  elements.fetchMetadataButton.textContent = hasMetadata ? t("refetch") : t("fetchMetadata");
+}
+
 function updateFaviconPreview(faviconUrl: string, title = "") {
   elements.faviconPreview.innerHTML = faviconMarkup(faviconUrl, title);
   setupFaviconFallbacks(elements.faviconPreview.querySelectorAll<HTMLImageElement>("img"));
@@ -360,6 +465,15 @@ function updateFaviconPreview(faviconUrl: string, title = "") {
 
 async function openStructuredPreview(bookmark: Bookmark) {
   await openStructuredPreviewUrl(bookmark.url, bookmark.title || safeHost(bookmark.url));
+}
+
+function openBookmarkDetails(bookmark: Bookmark) {
+  elements.bookmarkDetailsTitle.textContent = bookmark.title || t("bookmarkDetails");
+  elements.bookmarkDetailsUrl.textContent = bookmark.url;
+  elements.bookmarkDetailsUrl.href = bookmark.url;
+  elements.bookmarkDetailsDescription.textContent = bookmark.description || t("emptyDescription");
+  elements.bookmarkDetailsNotes.textContent = bookmark.notes || t("emptyNotes");
+  elements.bookmarkDetailsDialog.showModal();
 }
 
 async function openStructuredPreviewUrl(url: string, title: string) {
@@ -393,7 +507,9 @@ function showToast(message: string) {
 }
 
 function showError(error: unknown) {
-  showToast(error instanceof Error ? error.message : t("genericError"));
+  const message = error instanceof Error ? error.message : t("genericError");
+  elements.workspaceStatus.textContent = message;
+  showToast(message);
 }
 
 async function createInlineFolder() {
@@ -415,13 +531,14 @@ async function createInlineFolder() {
 
 async function createInlineTag() {
   const input = elements.inlineTagForm.querySelector<HTMLInputElement>("[name='name']");
+  const colorInput = elements.inlineTagForm.querySelector<HTMLInputElement>("[name='primaryColor']");
   const button = elements.inlineTagForm.querySelector<HTMLButtonElement>("button");
-  if (!input || !button) return;
+  if (!input || !colorInput || !button) return;
   const name = input.value.trim();
   if (!name) return;
   button.disabled = true;
   try {
-    const result = await requestJson<{ id: string }>("/api/tags", { method: "POST", body: JSON.stringify({ name }) });
+    const result = await requestJson<{ id: string }>("/api/tags", { method: "POST", body: JSON.stringify({ name, primaryColor: colorInput.value }) });
     input.value = "";
     await refreshTags(result.id);
     showToast(t("tagAdded"));
@@ -467,6 +584,20 @@ async function deleteFolder(id: string) {
   );
 }
 
+async function updateManagedFolder(id: string) {
+  const row = elements.folderManageList.querySelector<HTMLElement>(`[data-folder-id="${CSS.escape(id)}"]`);
+  const nameInput = row?.querySelector<HTMLInputElement>("[name='name']");
+  if (!row || !nameInput) return;
+  const name = nameInput.value.trim();
+  if (!name) return;
+  await requestJson(`/api/folders/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name })
+  });
+  await refresh();
+  showToast(t("folderUpdated"));
+}
+
 function isFolderWithin(folderId: string, ancestorId: string) {
   let currentId: string | null = folderId || null;
   const visited = new Set<string>();
@@ -484,6 +615,21 @@ async function deleteTag(id: string) {
   await requestJson(`/api/tags/${tag.id}`, { method: "DELETE" });
   await refresh();
   showToast(t("tagDeleted"));
+}
+
+async function updateManagedTag(id: string) {
+  const row = elements.tagManageList.querySelector<HTMLElement>(`[data-tag-id="${CSS.escape(id)}"]`);
+  const nameInput = row?.querySelector<HTMLInputElement>("[name='name']");
+  const colorInput = row?.querySelector<HTMLInputElement>("[name='primaryColor']");
+  if (!row || !nameInput || !colorInput) return;
+  const name = nameInput.value.trim();
+  if (!name) return;
+  await requestJson(`/api/tags/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name, primaryColor: colorInput.value })
+  });
+  await refresh();
+  showToast(t("tagUpdated"));
 }
 
 async function importBookmarkHtml(input: HTMLInputElement) {
@@ -507,6 +653,7 @@ async function importBookmarkHtml(input: HTMLInputElement) {
   }
 
   if (elements.manager.open) elements.manager.close();
+  if (elements.importManager.open) elements.importManager.close();
   elements.importOverlay.hidden = false;
   try {
     const html = await readTextBlob(file);
@@ -527,7 +674,7 @@ async function importBookmarkHtml(input: HTMLInputElement) {
 async function resetData() {
   if (!window.confirm(t("confirmResetData"))) return;
   elements.resetDataButton.disabled = true;
-  elements.manager.close();
+  if (elements.systemSettings.open) elements.systemSettings.close();
   elements.importOverlay.hidden = false;
   try {
     await requestJson("/api/reset", { method: "DELETE" });
@@ -537,6 +684,78 @@ async function resetData() {
     elements.resetDataButton.disabled = false;
     showError(error);
   }
+}
+
+async function loadSettings() {
+  const { settings } = await requestJson<{ settings: PublicSettings }>("/api/settings");
+  setSettingsFormValues(settings);
+}
+
+function setSettingsFormValues(settings: PublicSettings) {
+  setFormValue(elements.siteSettingsForm, "title", settings.site.title);
+  setFormValue(elements.siteSettingsForm, "description", settings.site.description);
+  setFormValue(elements.siteSettingsForm, "url", settings.site.url);
+  setFormValue(elements.siteSettingsForm, "siteName", settings.site.siteName);
+  setFormValue(elements.siteSettingsForm, "ogImage", settings.site.ogImage);
+  setFormValue(elements.siteSettingsForm, "locale", settings.site.locale);
+  setFormValue(elements.siteSettingsForm, "alternateLocale", settings.site.alternateLocale);
+  setFormValue(elements.siteSettingsForm, "twitterCard", settings.site.twitterCard);
+  setFormValue(elements.oidcSettingsForm, "issuerUrl", settings.oidc.issuerUrl);
+  setFormValue(elements.oidcSettingsForm, "clientId", settings.oidc.clientId);
+  setFormValue(elements.oidcSettingsForm, "tokenAuthMethod", settings.oidc.tokenAuthMethod);
+  setFormValue(elements.oidcSettingsForm, "scopes", settings.oidc.scopes);
+  setFormValue(elements.oidcSettingsForm, "allowedEmails", settings.oidc.allowedEmails);
+  setFormValue(elements.oidcSettingsForm, "allowedDomains", settings.oidc.allowedDomains);
+  setFormValue(elements.oidcSettingsForm, "sessionTtlSeconds", String(settings.oidc.sessionTtlSeconds));
+  elements.oidcSecretStatus.textContent = t(settings.oidc.clientSecretConfigured ? "oidcSecretConfigured" : "oidcSecretMissing");
+}
+
+function setFormValue(form: HTMLFormElement, name: string, value: string) {
+  const control = formControl<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(form, name);
+  control.value = value;
+}
+
+async function saveSiteSettings() {
+  const data = new FormData(elements.siteSettingsForm);
+  const { settings } = await requestJson<{ settings: PublicSettings }>("/api/settings", {
+    method: "PATCH",
+    body: JSON.stringify({
+      site: {
+        title: data.get("title"),
+        description: data.get("description"),
+        url: data.get("url"),
+        siteName: data.get("siteName"),
+        ogImage: data.get("ogImage"),
+        locale: data.get("locale"),
+        alternateLocale: data.get("alternateLocale"),
+        twitterCard: data.get("twitterCard")
+      }
+    })
+  });
+  setSettingsFormValues(settings);
+  elements.siteSettingsStatus.textContent = t("settingsSaved");
+  showToast(t("settingsSaved"));
+}
+
+async function saveOidcSettings() {
+  const data = new FormData(elements.oidcSettingsForm);
+  const { settings } = await requestJson<{ settings: PublicSettings }>("/api/settings", {
+    method: "PATCH",
+    body: JSON.stringify({
+      oidc: {
+        issuerUrl: data.get("issuerUrl"),
+        clientId: data.get("clientId"),
+        tokenAuthMethod: data.get("tokenAuthMethod"),
+        scopes: data.get("scopes"),
+        allowedEmails: data.get("allowedEmails"),
+        allowedDomains: data.get("allowedDomains"),
+        sessionTtlSeconds: data.get("sessionTtlSeconds")
+      }
+    })
+  });
+  setSettingsFormValues(settings);
+  elements.oidcSettingsStatus.textContent = t("settingsSaved");
+  showToast(t("settingsSaved"));
 }
 
 async function toggleFavorite(id: string) {
@@ -569,12 +788,18 @@ function handleBookmarkListClick(event: MouseEvent) {
     if (bookmark) openStructuredPreview(bookmark).catch(showError);
     return;
   }
+  const detailsButton = target.closest<HTMLButtonElement>("[data-details]");
+  if (detailsButton) {
+    const bookmark = state.bookmarks.find((item) => item.id === detailsButton.dataset.details);
+    if (bookmark) openBookmarkDetails(bookmark);
+    return;
+  }
   const favoriteButton = target.closest<HTMLButtonElement>("[data-favorite]");
   if (favoriteButton) toggleFavorite(favoriteButton.dataset.favorite ?? "").catch(showError);
 }
 
 elements.newButton.addEventListener("click", () => openEditor());
-elements.moveToTopButton.addEventListener("click", () => elements.workspace.scrollTo({ top: 0, behavior: "smooth" }));
+elements.moveToTopButton.addEventListener("click", scrollWorkspaceToTop);
 elements.languageButton.addEventListener("click", () => cycleLocale().catch(showError));
 elements.themeButton.addEventListener("click", () => cycleColorMode().catch(showError));
 theme.media.addEventListener("change", () => {
@@ -583,6 +808,7 @@ theme.media.addEventListener("change", () => {
 elements.workspace.addEventListener("scroll", () => {
   elements.moveToTopButton.hidden = elements.workspace.scrollTop < 320;
 });
+elements.homeFilterButton.addEventListener("click", () => resetFilters().catch(showError));
 elements.bookmarkList.addEventListener("click", handleBookmarkListClick);
 elements.bookmarkList.addEventListener("change", (event) => {
   const input = (event.target as Element).closest<HTMLInputElement>("[data-initial-bookmark-import]");
@@ -590,6 +816,7 @@ elements.bookmarkList.addEventListener("change", (event) => {
 });
 byId<HTMLButtonElement>("closeEditor").addEventListener("click", () => elements.editor.close());
 byId<HTMLButtonElement>("closePreview").addEventListener("click", () => elements.structuredPreview.close());
+byId<HTMLButtonElement>("closeBookmarkDetails").addEventListener("click", () => elements.bookmarkDetailsDialog.close());
 elements.previewContent.addEventListener("click", (event) => {
   const anchor = (event.target as Element).closest<HTMLAnchorElement>("[data-preview-url]");
   if (!anchor) return;
@@ -609,15 +836,62 @@ elements.openPreviewLinkInline.addEventListener("click", () => {
 });
 elements.cancelPreviewLink.addEventListener("click", () => elements.previewLinkDialog.close());
 elements.fetchMetadataButton.addEventListener("click", () => fillMetadata(true).catch(showError));
-formControl<HTMLInputElement>(elements.form, "url").addEventListener("blur", () => fillMetadata(false).catch(showError));
+formControl<HTMLInputElement>(elements.form, "url").addEventListener("input", (event) => {
+  window.clearTimeout(metadataTimer);
+  const url = (event.currentTarget as HTMLInputElement).value.trim();
+  updateMetadataButton(false);
+  if (!url) {
+    setMetadataStatus(t("metadataIdle"));
+    return;
+  }
+  setMetadataStatus(t("metadataReady"));
+  metadataTimer = window.setTimeout(() => fillMetadata(false).catch(showError), 700);
+});
+formControl<HTMLInputElement>(elements.form, "url").addEventListener("blur", () => {
+  window.clearTimeout(metadataTimer);
+  fillMetadata(false).catch(showError);
+});
 formControl<HTMLInputElement>(elements.form, "title").addEventListener("input", (event) => {
   const faviconUrl = formControl<HTMLInputElement>(elements.form, "faviconUrl").value;
   if (!faviconUrl) updateFaviconPreview("", (event.target as HTMLInputElement).value);
 });
-elements.manageDataButton.addEventListener("click", () => elements.manager.showModal());
+elements.manageDataButton.addEventListener("click", () => {
+  elements.manager.showModal();
+});
 byId<HTMLButtonElement>("closeManager").addEventListener("click", () => elements.manager.close());
+byId<HTMLButtonElement>("openFolderManager").addEventListener("click", () => {
+  elements.manager.close();
+  elements.folderManager.showModal();
+});
+byId<HTMLButtonElement>("closeFolderManager").addEventListener("click", () => elements.folderManager.close());
+byId<HTMLButtonElement>("openTagManager").addEventListener("click", () => {
+  elements.manager.close();
+  elements.tagManager.showModal();
+});
+byId<HTMLButtonElement>("closeTagManager").addEventListener("click", () => elements.tagManager.close());
+byId<HTMLButtonElement>("openImportManager").addEventListener("click", () => {
+  elements.manager.close();
+  elements.importManager.showModal();
+});
+byId<HTMLButtonElement>("closeImportManager").addEventListener("click", () => elements.importManager.close());
+byId<HTMLButtonElement>("openSystemSettings").addEventListener("click", () => {
+  elements.manager.close();
+  elements.systemSettings.showModal();
+  loadSettings().catch(showError);
+});
+byId<HTMLButtonElement>("closeSystemSettings").addEventListener("click", () => elements.systemSettings.close());
 elements.bookmarkHtmlInput.addEventListener("change", () => importBookmarkHtml(elements.bookmarkHtmlInput).catch(showError));
 elements.resetDataButton.addEventListener("click", () => resetData().catch(showError));
+elements.siteSettingsForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  setFormBusy(elements.siteSettingsForm, true);
+  saveSiteSettings().catch(showError).finally(() => setFormBusy(elements.siteSettingsForm, false));
+});
+elements.oidcSettingsForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  setFormBusy(elements.oidcSettingsForm, true);
+  saveOidcSettings().catch(showError).finally(() => setFormBusy(elements.oidcSettingsForm, false));
+});
 elements.folderSelect.addEventListener("change", () => {
   state.folderId = elements.folderSelect.value;
   refresh().catch(showError);
@@ -628,17 +902,28 @@ elements.searchInput.addEventListener("input", () => {
   searchTimer = window.setTimeout(() => refresh().catch(showError), 220);
 });
 elements.favoriteOnlyButton.addEventListener("click", () => {
+  if (!state.favoriteOnly && !state.bookmarks.some((bookmark) => bookmark.favorite)) return;
   state.favoriteOnly = !state.favoriteOnly;
   renderFavoriteFilter();
   refresh().catch(showError);
 });
 elements.folderManageList.addEventListener("click", (event) => {
-  const button = (event.target as Element).closest<HTMLButtonElement>("[data-delete-folder]");
-  if (button) deleteFolder(button.dataset.deleteFolder ?? "").catch(showError);
+  const saveButton = (event.target as Element).closest<HTMLButtonElement>("[data-save-folder]");
+  if (saveButton) {
+    updateManagedFolder(saveButton.dataset.saveFolder ?? "").catch(showError);
+    return;
+  }
+  const deleteButton = (event.target as Element).closest<HTMLButtonElement>("[data-delete-folder]");
+  if (deleteButton) deleteFolder(deleteButton.dataset.deleteFolder ?? "").catch(showError);
 });
 elements.tagManageList.addEventListener("click", (event) => {
-  const button = (event.target as Element).closest<HTMLButtonElement>("[data-delete-tag]");
-  if (button) deleteTag(button.dataset.deleteTag ?? "").catch(showError);
+  const saveButton = (event.target as Element).closest<HTMLButtonElement>("[data-save-tag]");
+  if (saveButton) {
+    updateManagedTag(saveButton.dataset.saveTag ?? "").catch(showError);
+    return;
+  }
+  const deleteButton = (event.target as Element).closest<HTMLButtonElement>("[data-delete-tag]");
+  if (deleteButton) deleteTag(deleteButton.dataset.deleteTag ?? "").catch(showError);
 });
 byId<HTMLFormElement>("folderForm").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -658,7 +943,8 @@ byId<HTMLFormElement>("tagForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = event.currentTarget as HTMLFormElement;
   setFormBusy(form, true);
-  requestJson("/api/tags", { method: "POST", body: JSON.stringify({ name: new FormData(form).get("name") }) })
+  const data = new FormData(form);
+  requestJson("/api/tags", { method: "POST", body: JSON.stringify({ name: data.get("name"), primaryColor: data.get("primaryColor") }) })
     .then(async () => {
       form.reset();
       await refresh();

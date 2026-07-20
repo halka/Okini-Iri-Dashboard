@@ -1,5 +1,5 @@
 export const appConfig = {
-  displayName: "Bookmark Dashboard",
+  displayName: "Okini",
   brandName: "Bookmark",
   brandProduct: "Dashboard",
   siteUrl: "https://bookmark-dashboard.pages.dev/",

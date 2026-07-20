@@ -1,7 +1,6 @@
 import hljs from "highlight.js/lib/core";
 import jsonLanguage from "highlight.js/lib/languages/json";
 import xmlLanguage from "highlight.js/lib/languages/xml";
-import "highlight.js/styles/github.css";
 
 hljs.registerLanguage("json", jsonLanguage);
 hljs.registerLanguage("xml", xmlLanguage);

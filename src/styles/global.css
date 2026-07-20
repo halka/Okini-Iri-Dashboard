@@ -1,3 +1,5 @@
+@import "highlight.js/styles/github.css";
+
 :root {
   color-scheme: light dark;
   --bg: #fafafa;
@@ -100,6 +102,17 @@ textarea:disabled {
   display: none !important;
 }
 
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 .skip-link {
   position: fixed;
   top: 8px;
@@ -137,15 +150,31 @@ textarea:disabled {
 }
 
 .app-title {
+  min-width: 0;
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.app-title button {
   display: inline-flex;
   align-items: center;
   min-width: 0;
   gap: 10px;
-  margin: 0;
+  border: 0;
+  background: transparent;
   color: var(--ink);
+  padding: 0;
   font-size: 20px;
+  font-weight: 800;
   line-height: 1.1;
+  text-align: left;
   white-space: nowrap;
+}
+
+.app-title button:hover,
+.app-title button:focus-visible {
+  color: var(--primary);
 }
 
 .app-title img {
@@ -349,13 +378,20 @@ textarea:disabled {
   border-color: var(--primary);
 }
 
+.card-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+}
+
 .card-main {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   min-width: 0;
-  margin: -6px;
+  margin: -6px 0 -6px -6px;
   border-radius: var(--radius);
   color: inherit;
   padding: 6px;
@@ -430,6 +466,10 @@ textarea:disabled {
   -webkit-line-clamp: 3;
 }
 
+.card-url {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 .card-meta,
 .card-footer,
 .pill-row,
@@ -475,11 +515,17 @@ textarea:disabled {
   font-weight: 800;
 }
 
+.tag-pill {
+  border: 1px solid color-mix(in srgb, var(--tag-color), var(--line) 38%);
+  background: color-mix(in srgb, var(--tag-color), var(--panel) 82%);
+}
+
 .edit-link,
 .ghost-link {
   display: inline-grid;
   place-items: center;
-  width: 96px;
+  min-width: 96px;
+  max-width: 100%;
   min-height: 34px;
   border-radius: var(--radius);
   background: var(--soft);
@@ -495,6 +541,22 @@ textarea:disabled {
 .edit-link:hover,
 .ghost-link:hover {
   background: var(--soft-hover);
+}
+
+.preview-link {
+  background: var(--primary);
+  color: white;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--primary), transparent 72%);
+}
+
+.preview-link:hover,
+.preview-link:focus-visible {
+  background: color-mix(in srgb, var(--primary), black 14%);
+}
+
+.card-top-action {
+  min-width: 104px;
+  margin-top: 2px;
 }
 
 .favorite-toggle {
@@ -588,7 +650,20 @@ dialog {
 }
 
 #manager {
-  width: min(980px, calc(100vw - 24px));
+  width: min(560px, calc(100vw - 24px));
+}
+
+#folderManager,
+#tagManager {
+  width: min(680px, calc(100vw - 24px));
+}
+
+#importManager {
+  width: min(620px, calc(100vw - 24px));
+}
+
+#systemSettings {
+  width: min(860px, calc(100vw - 24px));
 }
 
 #structuredPreview {
@@ -597,6 +672,10 @@ dialog {
 
 #previewLinkDialog {
   width: min(520px, calc(100vw - 24px));
+}
+
+#bookmarkDetailsDialog {
+  width: min(680px, calc(100vw - 24px));
 }
 
 dialog::backdrop {
@@ -621,6 +700,11 @@ dialog::backdrop {
   padding: 18px;
 }
 
+.manager-panel {
+  display: grid;
+  gap: 14px;
+}
+
 .editor-form {
   display: grid;
   gap: 12px;
@@ -639,6 +723,7 @@ dialog::backdrop {
 .editor-form h3,
 .manager-panel h3,
 .manager-panel h4,
+.manager-panel h5,
 .preview-panel h3,
 .preview-panel p,
 .link-choice-panel h3,
@@ -735,6 +820,10 @@ dialog::backdrop {
   margin-top: 10px;
 }
 
+.inline-tag-form {
+  grid-template-columns: minmax(0, 1fr) 46px auto;
+}
+
 .inline-folder-form {
   margin-top: -4px;
 }
@@ -795,21 +884,62 @@ dialog::backdrop {
 
 .manager-panel>header,
 .preview-panel>header {
-  margin-bottom: 16px;
+  margin-bottom: 2px;
 }
 
-.account-panel,
-.import-panel,
-.reset-panel {
+.menu-list {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.menu-action {
+  display: grid;
+  min-height: 48px;
   align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--field);
+  color: var(--ink);
+  padding: 0 14px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.menu-action:hover,
+.menu-action:focus-visible {
+  background: var(--soft-hover);
+}
+
+.manager-section,
+.settings-block {
+  display: grid;
+  align-items: stretch;
   gap: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--field);
   padding: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 0;
+}
+
+.account-panel,
+.import-panel,
+.reset-panel {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-section {
+  background: var(--panel);
+}
+
+.settings-section>h4 {
+  margin-bottom: 2px;
+}
+
+.settings-block {
+  background: var(--field);
+  margin-bottom: 0;
 }
 
 .account-panel p {
@@ -845,12 +975,12 @@ dialog::backdrop {
 
 .reset-panel {
   border-color: var(--danger-line);
-  margin-bottom: 18px;
 }
 
 .import-panel p,
 .reset-panel p,
-.manager-heading p {
+.manager-heading p,
+.manager-section>p {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 12px;
@@ -876,6 +1006,11 @@ dialog::backdrop {
   cursor: pointer;
 }
 
+.file-button:focus-within {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .file-button input {
   position: absolute;
   width: 1px;
@@ -887,7 +1022,8 @@ dialog::backdrop {
 .manager-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 14px;
+  margin-bottom: 14px;
 }
 
 .compact-form {
@@ -897,6 +1033,58 @@ dialog::backdrop {
   margin-top: 14px;
 }
 
+.settings-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.settings-form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-form .wide,
+.settings-actions,
+.settings-note {
+  grid-column: 1 / -1;
+}
+
+.settings-form textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.settings-note,
+.settings-actions p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-actions button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 128px;
+  min-height: 40px;
+  border-radius: var(--radius);
+  padding: 0 14px;
+  font-weight: 800;
+}
+
 .compact-form button {
   display: inline-grid;
   place-items: center;
@@ -904,6 +1092,10 @@ dialog::backdrop {
   min-height: var(--control-height);
   border-radius: var(--radius);
   padding: 0 12px;
+}
+
+#tagForm {
+  grid-template-columns: minmax(0, 1fr) 46px auto;
 }
 
 .manage-list {
@@ -923,6 +1115,14 @@ dialog::backdrop {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 10px;
+}
+
+.tag-manage-row {
+  grid-template-columns: minmax(0, 1fr) 46px auto auto;
+}
+
+.folder-manage-row {
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto) auto auto;
 }
 
 .manage-row div {
@@ -948,6 +1148,38 @@ dialog::backdrop {
   min-height: 36px;
   border-radius: var(--radius);
   padding: 0 10px;
+}
+
+.compact-form input[type="color"],
+.inline-tag-form input[type="color"],
+.tag-manage-row input[type="color"] {
+  width: 46px;
+  min-width: 46px;
+  height: var(--control-height);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--field);
+  padding: 4px;
+}
+
+.tag-manage-row input[type="text"] {
+  width: 100%;
+}
+
+.folder-manage-row input[type="text"] {
+  width: 100%;
+}
+
+.folder-manage-row>span {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.folder-manage-row button:not(.danger),
+.tag-manage-row button:not(.danger) {
+  background: var(--soft);
+  color: var(--ink);
 }
 
 .tag-dot {
@@ -1038,6 +1270,55 @@ html[data-color-mode="dark"] .hljs-built_in {
 
 .link-choice-panel {
   padding: 18px;
+}
+
+.bookmark-details-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.bookmark-details-panel header button {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  padding: 0;
+  font-size: 24px;
+}
+
+.bookmark-details-panel dl {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.bookmark-details-panel dl>div {
+  display: grid;
+  gap: 6px;
+}
+
+.bookmark-details-panel dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bookmark-details-panel dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bookmark-details-panel a {
+  color: var(--primary);
+  text-underline-offset: 3px;
 }
 
 .link-choice-panel p {
@@ -1319,13 +1600,16 @@ html[data-color-mode="dark"] .hljs-built_in {
   .account-panel,
   .import-panel,
   .reset-panel,
+  .settings-form,
+  .settings-actions,
   .enhanced-switches {
     grid-template-columns: 1fr;
   }
 
   .file-button,
   .reset-panel button,
-  .account-logout {
+  .account-logout,
+  .settings-actions button {
     width: 100%;
   }
 
@@ -1379,14 +1663,25 @@ html[data-color-mode="dark"] .hljs-built_in {
 
   .inline-folder-form,
   .inline-tag-form,
-  .compact-form {
+  .compact-form,
+  .folder-manage-row,
+  .tag-manage-row {
     grid-template-columns: 1fr;
   }
 
   .inline-folder-form button,
   .inline-tag-form button,
-  .compact-form button {
+  .compact-form button,
+  .folder-manage-row button,
+  .tag-manage-row button,
+  .compact-form input[type="color"],
+  .inline-tag-form input[type="color"],
+  .tag-manage-row input[type="color"] {
     width: 100%;
+  }
+
+  .folder-manage-row>span {
+    text-align: left;
   }
 }
 

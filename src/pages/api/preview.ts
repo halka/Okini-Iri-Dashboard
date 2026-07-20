@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { appConfig } from "../../config/app";
 import { ApiError, apiRoute, isHttpUrl, json, readJson, requiredText } from "../../lib/http";
+import { fetchPublicUrl } from "../../lib/remote-fetch";
 import { readResponseText } from "../../lib/text-encoding";
 
 type Payload = {
@@ -15,14 +16,14 @@ export const POST: APIRoute = apiRoute(async ({ request }) => {
   if (!isHttpUrl(value)) throw new ApiError("An HTTP or HTTPS URL is required", 422, "validation_error");
   const url = new URL(value);
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchPublicUrl(url, {
     redirect: "follow",
     signal: AbortSignal.timeout(15_000),
     headers: {
       accept: "application/json, application/xml, text/xml, text/plain;q=0.8, */*;q=0.4",
       "user-agent": appConfig.previewUserAgent
     }
-  });
+  }, { blockedOrigins: new Set([new URL(request.url).origin]) });
 
   if (!response.ok) {
     throw new ApiError(`fetch failed: ${response.status}`, 422, "preview_fetch_failed");

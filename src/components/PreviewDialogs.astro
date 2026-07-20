@@ -10,12 +10,12 @@ interface Props {
 const { t } = Astro.props;
 ---
 
-<dialog id="structuredPreview" aria-labelledby="previewTitle">
+<dialog id="structuredPreview" aria-labelledby="previewTitle" aria-describedby="previewStatus">
   <section class="preview-panel">
     <header>
       <div>
         <h3 id="previewTitle" data-i18n="structuredPreview">{t.structuredPreview}</h3>
-        <p id="previewStatus" data-i18n="previewIdle">{t.previewIdle}</p>
+        <p id="previewStatus" role="status" aria-live="polite" data-i18n="previewIdle">{t.previewIdle}</p>
       </div>
       <button type="button" id="closePreview" aria-label={t.close} data-i18n-aria-label="close">×</button>
     </header>
@@ -23,7 +23,30 @@ const { t } = Astro.props;
   </section>
 </dialog>
 
-<dialog id="previewLinkDialog" aria-labelledby="previewLinkDialogTitle">
+<dialog id="bookmarkDetailsDialog" aria-labelledby="bookmarkDetailsTitle">
+  <section class="link-choice-panel bookmark-details-panel">
+    <header>
+      <h3 id="bookmarkDetailsTitle" data-i18n="bookmarkDetails">{t.bookmarkDetails}</h3>
+      <button type="button" id="closeBookmarkDetails" aria-label={t.close} data-i18n-aria-label="close">×</button>
+    </header>
+    <dl>
+      <div>
+        <dt data-i18n="url">{t.url}</dt>
+        <dd><a id="bookmarkDetailsUrl" href="#" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"></a></dd>
+      </div>
+      <div>
+        <dt data-i18n="description">{t.description}</dt>
+        <dd id="bookmarkDetailsDescription"></dd>
+      </div>
+      <div>
+        <dt data-i18n="notes">{t.notes}</dt>
+        <dd id="bookmarkDetailsNotes"></dd>
+      </div>
+    </dl>
+  </section>
+</dialog>
+
+<dialog id="previewLinkDialog" aria-labelledby="previewLinkDialogTitle" aria-describedby="previewLinkUrl">
   <section class="link-choice-panel">
     <h3 id="previewLinkDialogTitle" data-i18n="previewLinkActionTitle">{t.previewLinkActionTitle}</h3>
     <p id="previewLinkUrl"></p>

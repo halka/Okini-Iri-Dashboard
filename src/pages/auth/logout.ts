@@ -3,15 +3,16 @@ import { readOidcConfig } from "../../lib/auth/config";
 import { redirectResponse } from "../../lib/auth/http";
 import { discoverProvider } from "../../lib/auth/oidc";
 import { authIdTokenKey, requireSession } from "../../lib/auth/session";
+import { getKv } from "../../lib/kv";
 
-export const POST: APIRoute = async ({ session, url }) => {
+export const POST: APIRoute = async ({ locals, session, url }) => {
   const authSession = requireSession(session);
   const idToken = await authSession.get<string>(authIdTokenKey);
   authSession.destroy();
   const signedOutUrl = new URL("/auth/signed-out", url);
 
   try {
-    const config = readOidcConfig();
+    const config = await readOidcConfig(getKv(locals));
     if (!config || !idToken) return redirectResponse(signedOutUrl, 303);
     const provider = await discoverProvider(config);
     if (!provider.end_session_endpoint) return redirectResponse(signedOutUrl, 303);
