@@ -427,10 +427,10 @@ When OIDC is configured, every API endpoint requires an authenticated session an
 ## Author
 ### halka
 
-- [Website 1](https://halka.jp)
-- [Website 2](https://rjch.jp)
+- [Website halka.jp](https://halka.jp)
+- [Website rjch.jp](https://rjch.jp)
 
-**Made in Goryokaku**
+![Made in Goryokaku](https://private-user-images.githubusercontent.com/71738/623899498-966287f1-8ec7-4464-994a-79caddd20dac.webp?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODQ1NTE5NzEsIm5iZiI6MTc4NDU1MTY3MSwicGF0aCI6Ii83MTczOC82MjM4OTk0OTgtOTY2Mjg3ZjEtOGVjNy00NDY0LTk5NGEtNzljYWRkZDIwZGFjLndlYnA_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjYwNzIwJTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI2MDcyMFQxMjQ3NTFaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT1lMWYyZGQ3NTc5NDM4YTM1MDFmOGMwOTNhMjZhNWQ5N2E4NTBkZDdlOThkNWNiYmY0MGZjNGI2NGEzY2Y3YTlmJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCZyZXNwb25zZS1jb250ZW50LXR5cGU9aW1hZ2UlMkZ3ZWJwIn0.XhWUjdKtd5Og5Mhosi-6ScSLoI6nU7qASPLsH0Ph36E)
 
 ## Contributing
 
