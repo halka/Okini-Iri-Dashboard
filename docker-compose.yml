@@ -1,0 +1,38 @@
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: okini-iri-dashboard
+    ports:
+      # Host port 8787 → container port 8787 (wrangler dev default)
+      - "8787:8787"
+    volumes:
+      # Persist local D1 database and KV state across restarts
+      - wrangler_data:/app/.wrangler
+    environment:
+      # ── Optional OIDC settings ──────────────────────────────────────────────
+      # Uncomment and fill these in when you want OIDC protection.
+      # Non-secret values only; keep OIDC_CLIENT_SECRET in a .env file
+      # (see the .env.example at the repo root) and never commit it.
+      #
+      # OIDC_ISSUER_URL: "https://identity.example.com/"
+      # OIDC_CLIENT_ID: "bookmark-dashboard"
+      # OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET}"
+      # OIDC_SCOPES: "openid profile email"
+      # OIDC_ALLOWED_EMAILS: "you@example.com"
+      # AUTH_SESSION_TTL_SECONDS: "28800"
+
+      # NODE_ENV is informational; wrangler local mode ignores it.
+      NODE_ENV: production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:8787/ > /dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  wrangler_data:
+    driver: local

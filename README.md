@@ -50,6 +50,7 @@ The header menu keeps account information and sign-out controls separate from **
     - [OIDC Setup](#oidc-setup)
     - [OIDC settings](#oidc-settings)
   - [Local Development](#local-development)
+  - [Docker](#docker)
   - [Import Behavior](#import-behavior)
   - [Reset Behavior](#reset-behavior)
   - [Scripts](#scripts)
@@ -158,6 +159,57 @@ Open [http://localhost:8787](http://localhost:8787). When OIDC is not configured
 
 `rebuild:local` runs the strict Astro checks, creates the Worker build, and applies pending local D1 migrations. It preserves existing local records.
 
+## Docker
+
+The repository ships a multi-stage `Dockerfile` and a `docker-compose.yml` so the dashboard can be run inside a container without installing Node.js, npm, or wrangler locally.
+
+**Files**
+
+| File | Purpose |
+| --- | --- |
+| `Dockerfile` | Builder stage compiles the Astro Worker; runner stage applies D1 migrations and starts `wrangler dev` |
+| `docker-compose.yml` | Maps port 8787, mounts the persistence volume, and exposes optional OIDC environment variables |
+| `.dockerignore` | Excludes `node_modules/`, `.wrangler/`, `.git/`, and other large paths from the build context |
+
+**Quick start**
+
+```sh
+# Build the image and start the container (first run or after source changes)
+docker compose up --build
+
+# Subsequent starts without rebuilding
+docker compose up
+```
+
+Open [http://localhost:8787](http://localhost:8787).
+
+**Data persistence**
+
+Wrangler stores its local D1 database and KV namespaces under `.wrangler/`. The compose file mounts a named Docker volume (`wrangler_data`) at `/app/.wrangler` so bookmark and preference data survives `docker compose down` and container restarts.
+
+**OIDC in Docker**
+
+To enable OIDC protection, create a `.env` file in the project root:
+
+```env
+OIDC_CLIENT_SECRET=your-secret-here
+```
+
+Then uncomment the OIDC environment variable block in `docker-compose.yml` and fill in the non-secret values:
+
+```yaml
+environment:
+  OIDC_ISSUER_URL: "https://identity.example.com/"
+  OIDC_CLIENT_ID: "bookmark-dashboard"
+  OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET}"
+  OIDC_SCOPES: "openid profile email"
+  OIDC_ALLOWED_EMAILS: "you@example.com"
+  AUTH_SESSION_TTL_SECONDS: "28800"
+```
+
+> [!NOTE]
+> `wrangler dev --local` does not require a Cloudflare account. All D1 and KV bindings are emulated on-disk inside the container.
+
 ## Import Behavior
 
 When D1 has no bookmarks and no search or filter is active, the workspace presents a direct Chrome bookmark HTML picker. The **Import** screen in the header menu provides the same control later.
@@ -183,6 +235,9 @@ Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standa
 | `npm run db:migrate:local` | Apply D1 migrations to the local database |
 | `npm run db:migrate:remote` | Apply D1 migrations to the remote database |
 | `npm run cf-typegen` | Regenerate Cloudflare binding types |
+| `docker compose up --build` | Build the Docker image and start the container |
+| `docker compose up` | Start the container without rebuilding the image |
+| `docker compose down` | Stop the container (data is preserved in the named volume) |
 
 ## Features
 
