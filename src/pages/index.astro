@@ -12,6 +12,8 @@ import "../styles/global.css";
 
 const preferences = await readPreferences(getKv(Astro.locals)).catch(() => defaultPreferences);
 const t = messages[preferences.locale];
+const user = Astro.locals.user;
+if (!user) throw new Error("Authenticated user is unavailable");
 ---
 
 <!doctype html>
@@ -20,7 +22,7 @@ const t = messages[preferences.locale];
   <body>
     <AppShell t={t} />
     <BookmarkEditorDialog t={t} />
-    <DataManagerDialog t={t} />
+    <DataManagerDialog t={t} user={user} />
     <PreviewDialogs t={t} />
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <div id="importOverlay" class="import-overlay" role="status" aria-live="assertive" hidden>

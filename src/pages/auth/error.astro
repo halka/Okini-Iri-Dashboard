@@ -1,0 +1,21 @@
+---
+import AuthPage from "../../components/AuthPage.astro";
+import { defaultPreferences } from "../../config/preferences";
+import { messages } from "../../i18n/messages";
+import { getKv } from "../../lib/kv";
+import { readPreferences } from "../../lib/preferences";
+
+const preferences = await readPreferences(getKv(Astro.locals)).catch(() => defaultPreferences);
+const t = messages[preferences.locale];
+const descriptions = {
+  configuration: t.authConfigurationError,
+  login_failed: t.authLoginFailed,
+  callback_invalid: t.authCallbackInvalid,
+  access_denied: t.authAccessDenied,
+  session_expired: t.authSessionExpired
+} as const;
+const code = Astro.url.searchParams.get("code") as keyof typeof descriptions;
+const description = descriptions[code] ?? t.authLoginFailed;
+---
+
+<AuthPage t={t} preferences={preferences} title={t.authErrorTitle} description={description} actionHref="/auth/login" actionLabel={t.signIn} />

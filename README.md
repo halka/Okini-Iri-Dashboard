@@ -2,9 +2,7 @@
 
 A private, responsive bookmark manager built with Astro and Cloudflare Workers. Bookmark data is stored in Cloudflare D1, UI preferences are stored in a dedicated Cloudflare KV namespace, and all visual tokens remain in CSS.
 
-> [!CAUTION]
-> This application exposes data-changing APIs and does not include application-level authentication.
-> **Protect production deployments with Cloudflare Access** or an equivalent access policy.
+Production access is protected by OpenID Connect (OIDC). The application uses the Authorization Code flow with PKCE, validates state and nonce values, verifies ID token signatures, rotates the Astro session after login, and fails closed when production OIDC settings are missing.
 
 ## Features
 
@@ -22,6 +20,9 @@ A private, responsive bookmark manager built with Astro and Cloudflare Workers. 
 - Use light, dark, or device-controlled color modes
 - Work across phone, tablet, desktop, and iOS Safari layouts
 - Fully reset D1 data without silently reseeding it on the next GET request
+- Authenticate pages and APIs through a configurable OIDC provider
+- Restrict access to selected email addresses or email domains
+- End both the local application session and, when supported, the OIDC provider session
 
 ## Technology
 
@@ -30,6 +31,7 @@ A private, responsive bookmark manager built with Astro and Cloudflare Workers. 
 - Cloudflare D1 for bookmark domain data
 - Cloudflare KV `PREFERENCES` for locale and color-mode preferences
 - Cloudflare KV `SESSION` for Astro's adapter-managed session storage
+- `oauth4webapi` for the OIDC Authorization Code flow with PKCE
 - `highlight.js` for JSON/XML syntax highlighting
 - TypeScript in strict mode
 
@@ -49,7 +51,7 @@ npm run rebuild:local
 npm run preview
 ```
 
-Open [http://localhost:8787](http://localhost:8787). Import a Chrome bookmark HTML file from the management dialog to populate the database.
+Open [http://localhost:8787](http://localhost:8787). When OIDC is not configured, loopback requests use an isolated local-development session. This fallback is never enabled for a deployed hostname. Import a Chrome bookmark HTML file from the management dialog to populate the database.
 
 `rebuild:local` runs the strict Astro checks, creates the Worker build, and applies pending local D1 migrations. It preserves existing local records.
 
@@ -76,6 +78,7 @@ The codebase separates domain data, infrastructure, HTTP handling, browser behav
 src/
 ├── components/              Astro UI structure
 ├── config/                  Identity, metadata, and preference defaults
+├── domain/auth.ts           Authenticated-user and OIDC transaction contracts
 ├── domain/bookmarks.ts      Shared bookmark domain contracts
 ├── i18n/messages.ts         Japanese and English copy
 ├── lib/
@@ -83,8 +86,12 @@ src/
 │   ├── kv.ts                Preferences KV binding access only
 │   ├── http.ts              API responses and runtime validation
 │   ├── metadata.ts          Remote metadata and favicon retrieval
+│   ├── auth/                OIDC configuration, protocol flow, and session helpers
 │   └── repositories/        D1 queries grouped by domain operation
-├── pages/api/               HTTP route orchestration
+├── middleware.ts            Page/API authentication and request security checks
+├── pages/
+│   ├── api/                 Authenticated HTTP route orchestration
+│   └── auth/                Login, callback, logout, and status routes
 ├── scripts/
 │   ├── dashboard.ts         Screen state and interaction coordination
 │   └── lib/                 Browser API, i18n, theme, DOM, and preview helpers
@@ -95,7 +102,8 @@ src/
 
 - D1 stores bookmarks, folders, tags, and their relationships. Schema changes happen only through versioned migrations.
 - `PREFERENCES` KV stores locale and color-mode preferences. It does not store bookmark records or visual color values.
-- `SESSION` KV is reserved for Astro's Cloudflare session driver.
+- `SESSION` KV stores OIDC transactions, authenticated-user sessions, and the ID token used for provider logout.
+- OIDC secrets and policy settings are Worker configuration, never D1 or KV domain records.
 - CSS owns color tokens and presentation. Fixed colors are not stored in D1 or KV.
 - API routes validate HTTP input and delegate persistence to repositories.
 - Browser modules own UI state and DOM behavior; they do not contain D1 or KV logic.
@@ -129,6 +137,7 @@ The archive field and tag colors are not part of the current schema. Tag and the
 | `/api/reset` | `DELETE` | Delete all D1 domain records |
 
 JSON responses use `no-store` and `nosniff` headers. Runtime validation rejects malformed input before repository operations.
+Every API endpoint requires an authenticated session and returns `401` instead of redirecting an unauthenticated API request.
 
 ## Cloudflare Setup
 
@@ -140,11 +149,57 @@ npx wrangler kv namespace create PREFERENCES
 npx wrangler kv namespace create SESSION
 ```
 
-Replace the placeholders in both `wrangler.toml` and `wrangler.build.toml`:
+Replace the placeholders in `wrangler.toml`:
 
 - `REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID`
 - `REPLACE_WITH_CLOUDFLARE_KV_NAMESPACE_ID`
 - `REPLACE_WITH_CLOUDFLARE_SESSION_KV_NAMESPACE_ID`
+
+### OIDC Setup
+
+Register the following redirect URI with your OIDC provider:
+
+```text
+https://your-dashboard.example.com/auth/callback
+```
+
+If the provider supports RP-initiated logout, also register:
+
+```text
+https://your-dashboard.example.com/auth/signed-out
+```
+
+Add non-secret settings to `wrangler.toml`:
+
+```toml
+[vars]
+OIDC_ISSUER_URL = "https://identity.example.com/"
+OIDC_CLIENT_ID = "bookmark-dashboard"
+OIDC_SCOPES = "openid profile email"
+OIDC_ALLOWED_EMAILS = "you@example.com"
+AUTH_SESSION_TTL_SECONDS = "28800"
+```
+
+Store a confidential-client secret with Wrangler:
+
+```sh
+npx wrangler secret put OIDC_CLIENT_SECRET
+```
+
+OIDC settings:
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `OIDC_ISSUER_URL` | Production | HTTPS issuer URL used for OIDC discovery |
+| `OIDC_CLIENT_ID` | Production | Registered OIDC client identifier |
+| `OIDC_CLIENT_SECRET` | Confidential clients | Secret stored with `wrangler secret`, never committed |
+| `OIDC_TOKEN_AUTH_METHOD` | No | `client_secret_basic` (default with a secret), `client_secret_post`, or `none` |
+| `OIDC_SCOPES` | No | Defaults to `openid profile email`; `openid` is always included |
+| `OIDC_ALLOWED_EMAILS` | No | Comma-separated, case-insensitive email allowlist |
+| `OIDC_ALLOWED_DOMAINS` | No | Comma-separated, case-insensitive email-domain allowlist |
+| `AUTH_SESSION_TTL_SECONDS` | No | Authenticated-session lifetime; defaults to 8 hours |
+
+When both allowlists are omitted, every identity authenticated by the configured provider is accepted. Configure at least one allowlist for a personal deployment.
 
 Then migrate, build, and deploy:
 
@@ -155,7 +210,7 @@ npx wrangler deploy
 ```
 
 > [!CAUTION]
-> Apply a Cloudflare Access policy before sharing the Worker URL. Bookmarklets and imported URLs should be treated as trusted personal data.
+> Test the provider callback and allowlist before sharing the Worker URL. Bookmarklets and imported URLs should still be treated as trusted personal data.
 
 ## Import Behavior
 
@@ -174,6 +229,7 @@ The parser excludes Chrome's synthetic root folder named in **Japanese** `ブッ
 - `src/config/preferences.ts`: supported locales, color modes, and defaults
 - `src/i18n/messages.ts`: all visible Japanese and English strings
 - `src/styles/global.css`: light/dark tokens and every visual color
+- Worker variables and secrets: OIDC provider metadata, client credentials, allowlists, and session lifetime
 
 ## Author
 halka

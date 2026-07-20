@@ -3,7 +3,12 @@ import cloudflare from "@astrojs/cloudflare";
 
 export default defineConfig({
   output: "server",
-  adapter: cloudflare({
-    configPath: "./wrangler.build.toml"
-  })
+  session: {
+    cookie: {
+      name: "bookmark-session",
+      sameSite: "lax",
+      secure: true
+    }
+  },
+  adapter: cloudflare()
 });

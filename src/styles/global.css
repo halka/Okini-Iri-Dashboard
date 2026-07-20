@@ -768,6 +768,7 @@ dialog::backdrop {
   margin-bottom: 16px;
 }
 
+.account-panel,
 .import-panel,
 .reset-panel {
   display: grid;
@@ -779,6 +780,37 @@ dialog::backdrop {
   background: var(--field);
   padding: 12px;
   margin-bottom: 14px;
+}
+
+.account-panel p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.account-panel small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.account-logout {
+  min-width: 116px;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--soft);
+  color: var(--ink);
+  padding: 0 14px;
+  font-weight: 800;
+}
+
+.account-logout:hover,
+.account-logout:focus-visible {
+  background: var(--soft-hover);
 }
 
 .reset-panel {
@@ -1079,6 +1111,56 @@ html[data-color-mode="dark"] .hljs-built_in {
   animation: progress-slide 1200ms ease-in-out infinite;
 }
 
+.auth-body {
+  overflow: auto;
+}
+
+.auth-screen {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+}
+
+.auth-panel {
+  display: grid;
+  justify-items: start;
+  width: min(440px, 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 28px;
+}
+
+.auth-panel img {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 22px;
+}
+
+.auth-panel h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.auth-panel p {
+  margin: 12px 0 24px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.auth-action {
+  display: inline-grid;
+  min-height: 44px;
+  place-items: center;
+  border-radius: var(--radius);
+  padding: 0 18px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -1204,6 +1286,7 @@ html[data-color-mode="dark"] .hljs-built_in {
   }
 
   .manager-grid,
+  .account-panel,
   .import-panel,
   .reset-panel,
   .enhanced-switches {
@@ -1211,7 +1294,8 @@ html[data-color-mode="dark"] .hljs-built_in {
   }
 
   .file-button,
-  .reset-panel button {
+  .reset-panel button,
+  .account-logout {
     width: 100%;
   }
 

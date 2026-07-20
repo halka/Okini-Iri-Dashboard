@@ -1,13 +1,16 @@
 ---
 import type { defaultLocale, messages } from "../i18n/messages";
+import type { AuthUser } from "../domain/auth";
 
 type Copy = (typeof messages)[typeof defaultLocale];
 
 interface Props {
   t: Copy;
+  user: AuthUser;
 }
 
-const { t } = Astro.props;
+const { t, user } = Astro.props;
+const identity = user.email ? `${user.name} · ${user.email}` : user.name;
 ---
 
 <dialog id="manager" aria-labelledby="managerTitle">
@@ -16,6 +19,17 @@ const { t } = Astro.props;
       <h3 id="managerTitle" data-i18n="manageData">{t.manageData}</h3>
       <button type="button" id="closeManager" aria-label={t.close} data-i18n-aria-label="close">×</button>
     </header>
+
+    <section class="account-panel">
+      <div>
+        <h4 data-i18n="account">{t.account}</h4>
+        <p><span data-i18n="signedInAs">{t.signedInAs}</span> <strong>{identity}</strong></p>
+        {user.local && <small data-i18n="localDevelopmentSession">{t.localDevelopmentSession}</small>}
+      </div>
+      <form method="post" action="/auth/logout">
+        <button type="submit" class="account-logout" data-i18n="signOut">{t.signOut}</button>
+      </form>
+    </section>
 
     <section class="import-panel">
       <div>
