@@ -2,7 +2,7 @@ export const appConfig = {
   displayName: "Okini",
   brandName: "Bookmark",
   brandProduct: "Dashboard",
-  siteUrl: "https://bookmark-dashboard.pages.dev/",
-  userAgent: "BookmarkDashboard/1.0 (+https://workers.cloudflare.com)",
-  previewUserAgent: "Bookmark Dashboard preview"
+  siteUrl: "https://b.halka.ee/",
+  userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+  previewUserAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
 } as const;

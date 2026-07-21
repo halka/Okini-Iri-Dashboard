@@ -35,6 +35,7 @@ export function mapBookmark(row: D1Row): Bookmark {
     description: String(row.description ?? ""),
     notes: String(row.notes ?? ""),
     favorite: Boolean(row.favorite),
+    vpnRequired: Boolean(row.vpn_required),
     structuredPreviewEnabled: Boolean(row.structured_preview_enabled),
     sortOrder: Number(row.sort_order),
     addDate: row.add_date === null ? null : Number(row.add_date),

@@ -31,9 +31,14 @@ export function faviconHtml(bookmark: Bookmark) {
 }
 
 export function faviconMarkup(faviconUrl: string, title: string) {
-  const safeFaviconUrl = isHttpBookmarkUrl(faviconUrl) ? faviconUrl : "";
+  const safeFaviconUrl = isFaviconImageSource(faviconUrl) ? faviconUrl : "";
   const fallback = `<span${safeFaviconUrl ? " hidden" : ""}>${escapeHtml(firstInitial(title))}</span>`;
   return safeFaviconUrl ? `<img src="${escapeAttribute(safeFaviconUrl)}" alt="" loading="lazy" />${fallback}` : fallback;
+}
+
+function isFaviconImageSource(value: string) {
+  if (isHttpBookmarkUrl(value)) return true;
+  return /^data:image\/(?:png|jpe?g|gif|webp|svg\+xml|x-icon|vnd\.microsoft\.icon);base64,[a-z0-9+/]+=*$/i.test(value);
 }
 
 export function setupFaviconFallbacks(images: Iterable<HTMLImageElement>) {

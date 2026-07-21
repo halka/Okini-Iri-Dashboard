@@ -10,19 +10,11 @@ export type RemoteFetchOptions = {
 
 export function publicHttpUrl(value: string | URL, options: RemoteFetchOptions = {}) {
   const url = typeof value === "string" ? new URL(value) : new URL(value.href);
-  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
-
   if (!['http:', 'https:'].includes(url.protocol)) {
     throw new UnsafeRemoteUrlError("Only http and https URLs can be fetched");
   }
   if (url.username || url.password) {
     throw new UnsafeRemoteUrlError("URLs with credentials cannot be fetched");
-  }
-  if (url.port && !['80', '443'].includes(url.port)) {
-    throw new UnsafeRemoteUrlError("Only standard HTTP ports can be fetched");
-  }
-  if (isBlockedHostname(hostname)) {
-    throw new UnsafeRemoteUrlError("Private or local network URLs cannot be fetched");
   }
   if ([...(options.blockedOrigins ?? [])].some((origin) => origin.toLowerCase() === url.origin.toLowerCase())) {
     throw new UnsafeRemoteUrlError("The application origin cannot be fetched");
@@ -47,30 +39,4 @@ export async function fetchPublicUrl(input: string | URL, init: RequestInit = {}
     if (!location) throw new UnsafeRemoteUrlError("Redirect response did not include a location");
     url = publicHttpUrl(new URL(location, url), options);
   }
-}
-
-function isBlockedHostname(hostname: string) {
-  if (!hostname || hostname === "localhost" || hostname.includes(":")) return true;
-  if (blockedHostSuffixes.some((suffix) => hostname === suffix.slice(1) || hostname.endsWith(suffix))) return true;
-  if (!hostname.includes(".")) return true;
-
-  const ipv4 = hostname.split(".");
-  if (ipv4.length !== 4 || ipv4.some((part) => !/^\d+$/.test(part))) return false;
-  const octets = ipv4.map(Number);
-  if (octets.some((octet) => octet < 0 || octet > 255)) return true;
-  const [first, second] = octets;
-  return (
-    first === 0 ||
-    first === 10 ||
-    first === 127 ||
-    (first === 100 && second >= 64 && second <= 127) ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168) ||
-    (first === 192 && second === 0) ||
-    (first === 198 && (second === 18 || second === 19)) ||
-    (first === 198 && second === 51) ||
-    (first === 203 && second === 0) ||
-    first >= 224
-  );
 }

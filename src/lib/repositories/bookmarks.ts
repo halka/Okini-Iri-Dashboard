@@ -3,7 +3,7 @@ import { mapBookmark, type D1Row } from "./mappers";
 
 const bookmarkSelect = `
   SELECT b.id, b.title, b.url, b.folder_id, f.name AS folder_name, b.description, b.notes,
-    b.favicon_url, b.favorite, b.structured_preview_enabled, b.sort_order, b.add_date, b.created_at, b.updated_at,
+    b.favicon_url, b.favorite, b.vpn_required, b.structured_preview_enabled, b.sort_order, b.add_date, b.created_at, b.updated_at,
     COALESCE(
       json_group_array(
         CASE WHEN t.id IS NULL THEN NULL ELSE json_object('id', t.id, 'name', t.name, 'primaryColor', t.primary_color) END
@@ -78,8 +78,8 @@ export async function createBookmark(db: D1Database, input: BookmarkInput) {
   await db
     .prepare(
       `INSERT INTO bookmarks
-        (id, title, url, favicon_url, folder_id, description, notes, favorite, structured_preview_enabled, sort_order, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COUNT(*) FROM bookmarks WHERE folder_id IS ?), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+        (id, title, url, favicon_url, folder_id, description, notes, favorite, vpn_required, structured_preview_enabled, sort_order, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COUNT(*) FROM bookmarks WHERE folder_id IS ?), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
     )
     .bind(
       id,
@@ -90,6 +90,7 @@ export async function createBookmark(db: D1Database, input: BookmarkInput) {
       input.description?.trim() ?? "",
       input.notes?.trim() ?? "",
       Number(Boolean(input.favorite)),
+      Number(Boolean(input.vpnRequired)),
       Number(Boolean(input.structuredPreviewEnabled)),
       input.folderId ?? null
     )
@@ -111,6 +112,7 @@ export async function updateBookmark(db: D1Database, id: string, input: Bookmark
   if (input.description !== undefined) addUpdate(sets, binds, "description", input.description.trim());
   if (input.notes !== undefined) addUpdate(sets, binds, "notes", input.notes.trim());
   if (typeof input.favorite === "boolean") addUpdate(sets, binds, "favorite", Number(input.favorite));
+  if (typeof input.vpnRequired === "boolean") addUpdate(sets, binds, "vpn_required", Number(input.vpnRequired));
   if (typeof input.structuredPreviewEnabled === "boolean") {
     addUpdate(sets, binds, "structured_preview_enabled", Number(input.structuredPreviewEnabled));
   }

@@ -25,6 +25,7 @@ export type Bookmark = {
   description: string;
   notes: string;
   favorite: boolean;
+  vpnRequired: boolean;
   structuredPreviewEnabled: boolean;
   sortOrder: number;
   addDate: number | null;
@@ -41,6 +42,7 @@ export type BookmarkInput = {
   description?: string;
   notes?: string;
   favorite?: boolean;
+  vpnRequired?: boolean;
   structuredPreviewEnabled?: boolean;
   tagIds?: string[];
 };
@@ -74,6 +76,7 @@ export type ChromeBookmarkItem = {
   faviconUrl?: string;
   sortOrder?: number;
   addDate?: number | null;
+  vpnRequired?: boolean;
 };
 
 export type ChromeBookmarksImport = {

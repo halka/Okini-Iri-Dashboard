@@ -32,10 +32,13 @@ if (!user) throw new Error("Authenticated user is unavailable");
     <div id="toast" class="toast" role="status"></div>
     <div id="importOverlay" class="import-overlay" role="status" hidden>
       <div class="import-progress">
-        <span class="spinner" aria-hidden="true"></span>
         <strong data-i18n="importingBookmarks">{t.importingBookmarks}</strong>
         <p data-i18n="importingBookmarksHint">{t.importingBookmarksHint}</p>
-        <div class="progress-bar" aria-hidden="true"><span></span></div>
+        <progress id="importProgressBar" class="progress-bar" max="100" value="0" aria-label={t.importProgress} data-i18n-aria-label="importProgress">0%</progress>
+        <div class="import-progress-values">
+          <output id="importProgressCount">0 / 0</output>
+          <output id="importProgressPercent">0%</output>
+        </div>
       </div>
     </div>
     <script>

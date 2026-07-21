@@ -2,7 +2,7 @@ import type { Bookmark, BookmarkInput, Tag } from "../domain/bookmarks";
 import type { ColorMode } from "../config/preferences";
 import type { Locale, MessageKey } from "../i18n/messages";
 import { readTextBlob, UnsupportedTextEncodingError } from "../lib/text-encoding";
-import { requestJson } from "./lib/api-client";
+import { ApiClientError, requestJson, requestJsonLines } from "./lib/api-client";
 import { byId, formControl } from "./lib/dom";
 import { escapeAttribute, escapeHtml, faviconHtml, faviconMarkup, isHttpBookmarkUrl, safeHost, setupFaviconFallbacks } from "./lib/format";
 import { I18nController } from "./lib/i18n-controller";
@@ -52,9 +52,13 @@ const elements = {
   appendImportCheckbox: byId<HTMLInputElement>("appendImportCheckbox"),
   resetDataButton: byId<HTMLButtonElement>("resetDataButton"),
   importOverlay: byId<HTMLElement>("importOverlay"),
+  importProgressBar: byId<HTMLProgressElement>("importProgressBar"),
+  importProgressCount: byId<HTMLOutputElement>("importProgressCount"),
+  importProgressPercent: byId<HTMLOutputElement>("importProgressPercent"),
   metadataStatus: byId<HTMLElement>("metadataStatus"),
   faviconPreview: byId<HTMLElement>("faviconPreview"),
   fetchMetadataButton: byId<HTMLButtonElement>("fetchMetadataButton"),
+  faviconUploadInput: byId<HTMLInputElement>("faviconUploadInput"),
   inlineTagForm: byId<HTMLElement>("inlineTagForm"),
   structuredPreview: byId<HTMLDialogElement>("structuredPreview"),
   previewTitle: byId<HTMLElement>("previewTitle"),
@@ -72,6 +76,7 @@ const elements = {
   bookmarkDetailsDomain: byId<HTMLElement>("bookmarkDetailsDomain"),
   bookmarkDetailsTags: byId<HTMLElement>("bookmarkDetailsTags"),
   bookmarkDetailsFavorite: byId<HTMLElement>("bookmarkDetailsFavorite"),
+  bookmarkDetailsVpnRequired: byId<HTMLElement>("bookmarkDetailsVpnRequired"),
   bookmarkDetailsStructuredPreview: byId<HTMLElement>("bookmarkDetailsStructuredPreview"),
   bookmarkDetailsFavicon: byId<HTMLElement>("bookmarkDetailsFavicon"),
   bookmarkDetailsDescription: byId<HTMLElement>("bookmarkDetailsDescription"),
@@ -103,11 +108,25 @@ let metadataController: AbortController | null = null;
 let lastMetadataUrl = "";
 let preferenceSaveQueue = Promise.resolve();
 let pendingConfirm: ((confirmed: boolean) => void) | null = null;
+let returnToTopTimer = 0;
+let finishReturnToTop: (() => void) | null = null;
 let previewHistory: { url: string; title: string }[] = [];
 let previewHistoryIndex = -1;
 let previewSearchIndex = -1;
 let previewSearchComposing = false;
 let previewSearchCompositionTimer = 0;
+
+const metadataFetchDelayMs = 5_000;
+const maxFaviconUploadBytes = 48 * 1024;
+const faviconImageTypes = new Set([
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/svg+xml",
+  "image/vnd.microsoft.icon",
+  "image/webp",
+  "image/x-icon"
+]);
 
 async function savePreferences(input: Partial<{ locale: Locale; colorMode: ColorMode }>) {
   const request = preferenceSaveQueue.then(() =>
@@ -194,13 +213,21 @@ function renderFavoriteFilter() {
 }
 
 function scrollWorkspaceToTop() {
+  finishReturnToTop?.();
   elements.homeFilterButton.classList.add("is-returning");
-  elements.workspace.scrollTo({ top: 0, behavior: "smooth" });
-  elements.moveToTopButton.hidden = true;
-  window.setTimeout(() => {
+  window.clearTimeout(returnToTopTimer);
+  const finishReturn = () => {
+    window.clearTimeout(returnToTopTimer);
+    elements.workspace.removeEventListener("scrollend", finishReturn);
     elements.homeFilterButton.classList.remove("is-returning");
     elements.homeFilterButton.blur();
-  }, 450);
+    finishReturnToTop = null;
+  };
+  finishReturnToTop = finishReturn;
+  elements.workspace.addEventListener("scrollend", finishReturn, { once: true });
+  elements.workspace.scrollTo({ top: 0, behavior: "smooth" });
+  elements.moveToTopButton.hidden = true;
+  returnToTopTimer = window.setTimeout(finishReturn, elements.workspace.scrollTop > 0 ? 900 : 0);
 }
 
 async function resetFilters() {
@@ -223,8 +250,10 @@ function renderManager() {
               <span class="visually-hidden">${escapeHtml(t("tagNamePlaceholder"))}</span>
               <input name="name" type="text" value="${escapeAttribute(tag.name)}" maxlength="100" />
             </label>
-            <button type="button" data-save-tag="${escapeAttribute(tag.id)}">${escapeHtml(t("save"))}</button>
-            <button type="button" class="danger" data-delete-tag="${escapeAttribute(tag.id)}">${escapeHtml(t("delete"))}</button>
+            <div class="tag-manage-actions">
+              <button type="button" data-save-tag="${escapeAttribute(tag.id)}">${escapeHtml(t("save"))}</button>
+              <button type="button" class="danger" data-delete-tag="${escapeAttribute(tag.id)}">${escapeHtml(t("delete"))}</button>
+            </div>
           </div>`
         )
         .join("")
@@ -243,23 +272,23 @@ function renderBookmarks() {
       ? `<section class="empty-panel first-run-panel">
           <h2>${escapeHtml(t("importBookmarks"))}</h2>
           <p>${escapeHtml(t("importBookmarksHint"))}</p>
-          <label class="file-button first-run-import">
-            <span>${escapeHtml(t("chooseBookmarkHtml"))}</span>
-            <input type="file" accept=".html,.htm,text/html" data-initial-bookmark-import aria-label="${escapeAttribute(t("chooseBookmarkHtml"))}" />
-          </label>
+          <button type="button" class="file-button first-run-import" data-open-import>${escapeHtml(t("import"))}</button>
           <small>${escapeHtml(t("bookmarkHtmlRequirements"))}</small>
         </section>`
       : `<div class="empty-panel">${escapeHtml(t("noLinks"))}</div>`;
     return;
   }
 
-  elements.bookmarkList.innerHTML = state.bookmarks
+  const bookmarks = [...state.bookmarks].sort((a, b) => Number(b.favorite) - Number(a.favorite));
+  elements.bookmarkList.innerHTML = bookmarks
     .map((bookmark) => {
       const isOpenable = isHttpBookmarkUrl(bookmark.url);
       const previewAction =
         bookmark.structuredPreviewEnabled && isOpenable
           ? `<button type="button" class="ghost-link preview-link" data-preview="${escapeAttribute(bookmark.id)}">${escapeHtml(t("structuredPreview"))}</button>`
           : "";
+      const tags = bookmark.tags.map((tag) => `<span class="card-tag">${escapeHtml(tag.name)}</span>`).join("");
+      const vpnBadge = bookmark.vpnRequired ? `<span class="card-vpn-badge">${escapeHtml(t("vpnRequired"))}</span>` : "";
       const main = isOpenable
         ? `<a class="card-main-link" href="${escapeAttribute(bookmark.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="${escapeAttribute(t("openLinkLabel", { title: bookmark.title }))}">
           ${faviconHtml(bookmark)}
@@ -281,6 +310,7 @@ function renderBookmarks() {
         </div>
         <div class="card-preview-row">${previewAction}</div>
         <div class="card-footer">
+          <div class="card-tags">${vpnBadge}${tags}</div>
           <div class="card-actions">
             <button type="button" class="edit-link" data-edit="${escapeAttribute(bookmark.id)}">${escapeHtml(t("edit"))}</button>
             <button type="button" class="ghost-link" data-details="${escapeAttribute(bookmark.id)}">${escapeHtml(t("descriptionNotes"))}</button>
@@ -311,6 +341,9 @@ function selectedEditorTagIds() {
 }
 
 function openEditor(bookmark?: Bookmark) {
+  window.clearTimeout(metadataTimer);
+  metadataController?.abort();
+  metadataController = null;
   elements.form.reset();
   elements.editorTitle.textContent = bookmark ? t("linkEdit") : t("newLink");
   elements.deleteButton.toggleAttribute("hidden", !bookmark);
@@ -321,6 +354,7 @@ function openEditor(bookmark?: Bookmark) {
   formControl<HTMLInputElement>(elements.form, "description").value = bookmark?.description ?? "";
   formControl<HTMLTextAreaElement>(elements.form, "notes").value = bookmark?.notes ?? "";
   formControl<HTMLInputElement>(elements.form, "favorite").checked = Boolean(bookmark?.favorite);
+  formControl<HTMLInputElement>(elements.form, "vpnRequired").checked = Boolean(bookmark?.vpnRequired);
   formControl<HTMLInputElement>(elements.form, "structuredPreviewEnabled").checked = Boolean(bookmark?.structuredPreviewEnabled);
   renderEditorTags(new Set(bookmark?.tags.map((tag) => tag.id) ?? []));
   updateFaviconPreview(bookmark?.faviconUrl ?? "", bookmark?.title ?? "");
@@ -340,6 +374,7 @@ function bookmarkPayload(): BookmarkInput {
     description: String(data.get("description") ?? ""),
     notes: String(data.get("notes") ?? ""),
     favorite: data.get("favorite") === "on",
+    vpnRequired: data.get("vpnRequired") === "on",
     structuredPreviewEnabled: data.get("structuredPreviewEnabled") === "on",
     tagIds: Array.from(elements.editorTags.querySelectorAll<HTMLInputElement>("input[type='checkbox']:checked"), (option) => option.value)
   };
@@ -373,8 +408,7 @@ async function fillMetadata(force = false) {
     setMetadataStatus(t("metadataLoaded"));
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return;
-    faviconInput.value = "";
-    updateFaviconPreview("", titleInput.value);
+    updateFaviconPreview(faviconInput.value.trim(), titleInput.value);
     setMetadataStatus(error instanceof Error ? error.message : t("metadataFailed"));
   } finally {
     if (!metadataController?.signal.aborted) elements.fetchMetadataButton.disabled = false;
@@ -408,6 +442,7 @@ function openBookmarkDetails(bookmark: Bookmark) {
   elements.bookmarkDetailsDomain.textContent = safeHost(bookmark.url) || t("emptyValue");
   elements.bookmarkDetailsTags.textContent = bookmark.tags.length ? bookmark.tags.map((tag) => tag.name).join(", ") : t("emptyValue");
   elements.bookmarkDetailsFavorite.textContent = t(bookmark.favorite ? "yes" : "no");
+  elements.bookmarkDetailsVpnRequired.textContent = t(bookmark.vpnRequired ? "yes" : "no");
   elements.bookmarkDetailsStructuredPreview.textContent = t(bookmark.structuredPreviewEnabled ? "yes" : "no");
   elements.bookmarkDetailsFavicon.textContent = bookmark.faviconUrl || t("emptyValue");
   elements.bookmarkDetailsDescription.textContent = bookmark.description || t("emptyDescription");
@@ -650,7 +685,7 @@ async function importBookmarkHtml(input: HTMLInputElement) {
     return;
   }
 
-  const append = input.hasAttribute("data-initial-bookmark-import") || elements.appendImportCheckbox.checked;
+  const append = elements.appendImportCheckbox.checked;
   const force = !append && (state.bookmarks.length > 0 || state.tags.length > 0);
   if (force && !(await confirmAction(t("confirmReplaceBookmarks"), t("import")))) {
     input.value = "";
@@ -659,13 +694,25 @@ async function importBookmarkHtml(input: HTMLInputElement) {
 
   if (elements.manager.open) elements.manager.close();
   if (elements.importManager.open) elements.importManager.close();
+  updateImportProgress(0, 0, 0);
   elements.importOverlay.hidden = false;
   try {
     const html = await readTextBlob(file);
-    await requestJson("/api/import", {
-      method: "POST",
-      body: JSON.stringify({ html, source: file.name, force, append })
-    });
+    let completed = false;
+    await requestJsonLines<ImportStreamMessage>(
+      "/api/import",
+      { method: "POST", body: JSON.stringify({ html, source: file.name, force, append }) },
+      (message) => {
+        if (message.type === "progress") {
+          updateImportProgress(message.completed, message.total, message.percent);
+          return;
+        }
+        if (message.type === "error") throw new ApiClientError(message.error, 500, message.code);
+        completed = true;
+        updateImportProgress(message.result.bookmarks, message.result.bookmarks, 100);
+      }
+    );
+    if (!completed) throw new ApiClientError("Import response ended before completion", 500, "incomplete_import");
     window.location.reload();
   } catch (error) {
     elements.importOverlay.hidden = true;
@@ -674,6 +721,64 @@ async function importBookmarkHtml(input: HTMLInputElement) {
   } finally {
     input.value = "";
   }
+}
+
+type ImportStreamMessage =
+  | { type: "progress"; completed: number; total: number; percent: number }
+  | { type: "complete"; result: { bookmarks: number; folders: number; skipped: boolean; tags: number } }
+  | { type: "error"; error: string; code?: string };
+
+function updateImportProgress(completed: number, total: number, percent: number) {
+  const safeTotal = Math.max(0, total);
+  const safeCompleted = Math.min(Math.max(0, completed), safeTotal);
+  const safePercent = Math.min(100, Math.max(0, Math.round(percent)));
+  elements.importProgressBar.value = safePercent;
+  elements.importProgressBar.textContent = `${safePercent}%`;
+  elements.importProgressBar.setAttribute("aria-valuetext", `${safeCompleted} / ${safeTotal}, ${safePercent}%`);
+  elements.importProgressCount.value = `${safeCompleted} / ${safeTotal}`;
+  elements.importProgressPercent.value = `${safePercent}%`;
+}
+
+async function uploadFavicon(input: HTMLInputElement) {
+  const file = input.files?.[0];
+  if (!file) return;
+  if (file.size > maxFaviconUploadBytes) {
+    input.value = "";
+    showToast(t("faviconFileTooLarge"));
+    return;
+  }
+  if (!isFaviconFile(file)) {
+    input.value = "";
+    showToast(t("invalidFaviconFile"));
+    return;
+  }
+
+  const faviconInput = formControl<HTMLInputElement>(elements.form, "faviconUrl");
+  const title = formControl<HTMLInputElement>(elements.form, "title").value;
+  const dataUrl = normalizeFaviconDataUrl(await readFileAsDataUrl(file), file);
+  faviconInput.value = dataUrl;
+  updateFaviconPreview(dataUrl, title);
+  input.value = "";
+}
+
+function isFaviconFile(file: File) {
+  return faviconImageTypes.has(file.type) || /\.ico$/i.test(file.name);
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result ?? "")), { once: true });
+    reader.addEventListener("error", () => reject(reader.error ?? new Error("Failed to read favicon")), { once: true });
+    reader.readAsDataURL(file);
+  });
+}
+
+function normalizeFaviconDataUrl(dataUrl: string, file: File) {
+  if (/\.ico$/i.test(file.name)) {
+    return dataUrl.replace(/^data:(?:application\/octet-stream)?;/i, "data:image/x-icon;");
+  }
+  return dataUrl;
 }
 
 async function resetData() {
@@ -710,6 +815,10 @@ function setFormBusy(form: HTMLFormElement, busy: boolean) {
 
 function handleBookmarkListClick(event: MouseEvent) {
   const target = event.target as Element;
+  if (target.closest<HTMLButtonElement>("[data-open-import]")) {
+    elements.importManager.showModal();
+    return;
+  }
   const editButton = target.closest<HTMLButtonElement>("[data-edit]");
   if (editButton) {
     openEditor(state.bookmarks.find((bookmark) => bookmark.id === editButton.dataset.edit));
@@ -746,10 +855,6 @@ elements.workspace.addEventListener("scroll", () => {
 });
 elements.homeFilterButton.addEventListener("click", () => resetFilters().catch(showError));
 elements.bookmarkList.addEventListener("click", handleBookmarkListClick);
-elements.bookmarkList.addEventListener("change", (event) => {
-  const input = (event.target as Element).closest<HTMLInputElement>("[data-initial-bookmark-import]");
-  if (input) importBookmarkHtml(input).catch(showError);
-});
 byId<HTMLButtonElement>("closeEditor").addEventListener("click", () => elements.editor.close());
 byId<HTMLButtonElement>("closePreview").addEventListener("click", () => elements.structuredPreview.close());
 byId<HTMLButtonElement>("closeBookmarkDetails").addEventListener("click", () => elements.bookmarkDetailsDialog.close());
@@ -803,7 +908,11 @@ elements.confirmDialogCancel.addEventListener("click", () => resolveConfirm(fals
 elements.confirmDialog.addEventListener("close", () => {
   if (pendingConfirm) resolveConfirm(false);
 });
-elements.fetchMetadataButton.addEventListener("click", () => fillMetadata(true).catch(showError));
+elements.fetchMetadataButton.addEventListener("click", () => {
+  window.clearTimeout(metadataTimer);
+  fillMetadata(true).catch(showError);
+});
+elements.faviconUploadInput.addEventListener("change", () => uploadFavicon(elements.faviconUploadInput).catch(showError));
 formControl<HTMLInputElement>(elements.form, "url").addEventListener("input", (event) => {
   window.clearTimeout(metadataTimer);
   const url = (event.currentTarget as HTMLInputElement).value.trim();
@@ -813,15 +922,19 @@ formControl<HTMLInputElement>(elements.form, "url").addEventListener("input", (e
     return;
   }
   setMetadataStatus(t("metadataReady"));
-  metadataTimer = window.setTimeout(() => fillMetadata(false).catch(showError), 700);
-});
-formControl<HTMLInputElement>(elements.form, "url").addEventListener("blur", () => {
-  window.clearTimeout(metadataTimer);
-  fillMetadata(false).catch(showError);
+  metadataTimer = window.setTimeout(() => fillMetadata(false).catch(showError), metadataFetchDelayMs);
 });
 formControl<HTMLInputElement>(elements.form, "title").addEventListener("input", (event) => {
   const faviconUrl = formControl<HTMLInputElement>(elements.form, "faviconUrl").value;
   if (!faviconUrl) updateFaviconPreview("", (event.target as HTMLInputElement).value);
+});
+formControl<HTMLInputElement>(elements.form, "faviconUrl").addEventListener("input", (event) => {
+  const title = formControl<HTMLInputElement>(elements.form, "title").value;
+  updateFaviconPreview((event.currentTarget as HTMLInputElement).value.trim(), title);
+});
+formControl<HTMLInputElement>(elements.form, "faviconUrl").addEventListener("blur", (event) => {
+  const input = event.currentTarget as HTMLInputElement;
+  input.value = input.value.trim();
 });
 elements.manageDataButton.addEventListener("click", () => {
   elements.manager.showModal();

@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
-import { importChromeBookmarks } from "../../lib/repositories/import";
+import { importChromeBookmarks, type ImportProgress } from "../../lib/repositories/import";
 import { getDb } from "../../lib/d1";
 import { parseChromeBookmarksHtml } from "../../lib/bookmark-html";
-import { ApiError, apiRoute, json, optionalBoolean, optionalText, readJson } from "../../lib/http";
+import { ApiError, apiRoute, optionalBoolean, optionalText, readJson } from "../../lib/http";
 import { normalizeUtf8Text } from "../../lib/text-encoding";
 
 type Payload = { append?: boolean; force?: boolean; html?: string; source?: string };
@@ -26,8 +26,46 @@ export const POST: APIRoute = apiRoute(async ({ locals, request }) => {
   if (!parsedBookmarks.bookmarks?.length && !parsedBookmarks.folders?.length) {
     throw new ApiError("The Chrome bookmark HTML export is empty", 422, "invalid_bookmark_html");
   }
-  const result = await importChromeBookmarks(getDb(locals), parsedBookmarks, { append, force }, {
-    blockedOrigins: new Set([new URL(request.url).origin])
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let open = true;
+      const send = (message: unknown) => {
+        if (!open) return;
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(message)}\n`));
+        } catch {
+          open = false;
+        }
+      };
+      const sendProgress = ({ completed, total }: ImportProgress) => {
+        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+        send({ type: "progress", completed, total, percent });
+      };
+
+      void importChromeBookmarks(
+        getDb(locals),
+        parsedBookmarks,
+        { append, force },
+        { blockedOrigins: new Set([new URL(request.url).origin]) },
+        sendProgress
+      )
+        .then((result) => send({ type: "complete", result }))
+        .catch((error) => {
+          console.error(error);
+          send({ type: "error", error: "Import failed", code: "import_failed" });
+        })
+        .finally(() => {
+          if (open) controller.close();
+        });
+    }
   });
-  return json(result);
+
+  return new Response(stream, {
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "application/x-ndjson; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    }
+  });
 });

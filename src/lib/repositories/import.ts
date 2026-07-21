@@ -10,6 +10,11 @@ type ImportMode = {
   force?: boolean;
 };
 
+export type ImportProgress = {
+  completed: number;
+  total: number;
+};
+
 type NormalizedBookmark = {
   id: string;
   title: string;
@@ -19,6 +24,7 @@ type NormalizedBookmark = {
   faviconUrl: string;
   sortOrder: number;
   addDate: number | null;
+  vpnRequired: boolean;
 };
 
 const IMPORT_CONCURRENCY = 6;
@@ -28,7 +34,8 @@ export async function importChromeBookmarks(
   db: D1Database,
   input: ChromeBookmarksImport,
   mode: ImportMode = {},
-  remoteFetchOptions: RemoteFetchOptions = {}
+  remoteFetchOptions: RemoteFetchOptions = {},
+  onProgress?: (progress: ImportProgress) => void
 ) {
   const current = await db.prepare("SELECT COUNT(*) AS count FROM bookmarks").first<{ count: number }>();
   const append = Boolean(mode.append);
@@ -38,10 +45,12 @@ export async function importChromeBookmarks(
   }
 
   const normalized = normalizeImportedBookmarks(input);
+  onProgress?.({ completed: 0, total: normalized.bookmarks.length });
   const enrichedBookmarks = await mapConcurrent(
     normalized.bookmarks,
     IMPORT_CONCURRENCY,
-    (bookmark) => enrichBookmark(bookmark, remoteFetchOptions)
+    (bookmark) => enrichBookmark(bookmark, remoteFetchOptions),
+    (completed) => onProgress?.({ completed, total: normalized.bookmarks.length })
   );
 
   if (force) await resetAllData(db);
@@ -53,10 +62,19 @@ export async function importChromeBookmarks(
     db
       .prepare(
         `INSERT INTO bookmarks
-          (id, title, url, favicon_url, folder_id, description, sort_order, add_date, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+          (id, title, url, favicon_url, folder_id, description, vpn_required, sort_order, add_date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       )
-      .bind(bookmark.id, bookmark.title, bookmark.url, bookmark.faviconUrl, bookmark.description, bookmark.sortOrder, bookmark.addDate)
+      .bind(
+        bookmark.id,
+        bookmark.title,
+        bookmark.url,
+        bookmark.faviconUrl,
+        bookmark.description,
+        Number(bookmark.vpnRequired),
+        bookmark.sortOrder,
+        bookmark.addDate
+      )
   );
   for (let index = 0; index < bookmarkStatements.length; index += 50) {
     await db.batch(bookmarkStatements.slice(index, index + 50));
@@ -120,7 +138,8 @@ function normalizeImportedBookmarks(input: ChromeBookmarksImport) {
       description: bookmark.description?.trim() ?? "",
       faviconUrl: bookmark.faviconUrl?.trim() ?? "",
       sortOrder: bookmark.sortOrder ?? index,
-      addDate: bookmark.addDate ?? null
+      addDate: bookmark.addDate ?? null,
+      vpnRequired: Boolean(bookmark.vpnRequired)
     };
   });
   const tagNames = uniqueNames(bookmarks.flatMap((bookmark) => bookmark.tagNames));
@@ -163,14 +182,22 @@ async function tagIdsByName(db: D1Database) {
   return new Map(result.results.map((tag) => [tagKey(tag.name), tag.id]));
 }
 
-async function mapConcurrent<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>) {
+async function mapConcurrent<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+  onComplete?: (completed: number) => void
+) {
   const results = new Array<R>(items.length);
   let nextIndex = 0;
+  let completed = 0;
 
   async function worker() {
     while (nextIndex < items.length) {
       const index = nextIndex++;
       results[index] = await mapper(items[index]);
+      completed += 1;
+      onComplete?.(completed);
     }
   }
 

@@ -29,14 +29,14 @@ npm run rebuild:local
 npm run preview
 ```
 
-Open [http://localhost:8787](http://localhost:8787), then choose **Menu > Import** to load a Chrome bookmark HTML file.
+Open [http://localhost:8787](http://localhost:8787), then choose **Import** from the empty state or **Menu > Import** to load a Chrome bookmark HTML file.
 
 ## Using the Dashboard
 
-1. Select **Add**, enter a URL, and move focus away from the URL field. The dashboard automatically fetches the resolved URL, title, description, and favicon. Use **Fetch** or **Refetch** only when you want to run that step manually.
-2. Review the fetched fields, choose tags, then save the bookmark. New tags can also be created from the editor.
+1. Select **Add** and enter a URL. After the URL remains unchanged for about five seconds, the dashboard automatically fetches the resolved URL, title, description, and favicon. Use **Fetch** or **Refetch** to run that step immediately.
+2. Review the fetched fields, choose tags, mark favorites or VPN-required links when needed, then save the bookmark. New tags can also be created from the editor.
 3. Use search, **All**, a tag, or **Favorites** to narrow the list. Search includes tag names. Selecting the app title in the header clears active filters and returns to the top.
-4. Bookmark cards always show the URL. Select **Description / notes** for the full text, or **Pretty view** when JSON/XML preview is enabled for that bookmark.
+4. Bookmark cards show favicon, title, domain, tags, favorite state, and a VPN badge when the link requires VPN. Select **Details** for full record data, or **Pretty view** when JSON/XML preview is enabled for that bookmark.
 
 The header menu keeps account information and sign-out controls separate from **Manage tags**, **Import**, **Export**, and **System settings**. System settings contains the full-reset control.
 
@@ -59,6 +59,7 @@ This supports Safari Home Screen web apps and edge-to-edge layouts in Chrome 135
   - [Quick Start](#quick-start)
   - [Using the Dashboard](#using-the-dashboard)
   - [Mobile Browser Colors](#mobile-browser-colors)
+  - [Table of Contents](#table-of-contents)
   - [Requirements](#requirements)
   - [Cloudflare Setup](#cloudflare-setup)
     - [OIDC Setup](#oidc-setup)
@@ -77,9 +78,11 @@ This supports Safari Home Screen web apps and edge-to-edge layouts in Chrome 135
     - [Responsibility Boundaries](#responsibility-boundaries)
   - [Data Model](#data-model)
   - [API Overview](#api-overview)
-  - [Author](#author)
   - [Contributing](#contributing)
   - [LICENSE](#license)
+  - [Author](#author)
+    - [halka](#halka)
+    - [Make in Goryokaku](#make-in-goryokaku)
 
 ## Requirements
 
@@ -175,6 +178,13 @@ npm run preview
 Open [http://localhost:8787](http://localhost:8787). When OIDC is not configured, requests use an authentication-disabled account context. Choose **Menu > Import** to populate the database from a Chrome bookmark HTML file.
 
 `rebuild:local` runs the strict Astro checks, creates the Worker build, and applies pending local D1 migrations. It preserves existing local records.
+
+After schema changes, apply pending migrations before running against an existing database:
+
+```sh
+npm run db:migrate:local
+npm run db:migrate:remote
+```
 
 ## Docker
 
@@ -306,15 +316,15 @@ container run \
 
 ## Import Behavior
 
-When D1 has no bookmarks and no search or filter is active, the workspace presents a direct Chrome bookmark HTML picker. The **Import** screen in the header menu provides the same control later.
+When D1 has no bookmarks and no search or filter is active, the workspace presents an **Import** button that opens the same import modal used from the header menu.
 
-The importer accepts Chrome `.html` or `.htm` exports up to 10 MiB. UTF-8, Shift_JIS (including Windows-31J), EUC-JP, and ISO-2022-JP input is detected and converted to Unicode before it is sent as UTF-8 JSON. URL metadata and structured preview responses use the same conversion boundary. The importer closes the **Import** screen after file selection, shows an indeterminate progress overlay, imports metadata with bounded concurrency, and reloads after success.
+The importer accepts Chrome `.html` or `.htm` exports up to 10 MiB. UTF-8, Shift_JIS (including Windows-31J), EUC-JP, and ISO-2022-JP input is detected and converted to Unicode before it is sent as UTF-8 JSON. URL metadata and structured preview responses use the same conversion boundary. The importer closes the **Import** modal after file selection, streams completed/total counts and percentage to a progress bar, imports metadata with bounded concurrency, and reloads after success.
 
 The parser excludes Chrome's synthetic root folder named `ブックマーク バー` or `Bookmarks bar`. Imported folders become tags, including nested folder names. The **Append to existing links** option adds another bookmark export without clearing current links; turning it off replaces the current data after confirmation. HTTP(S) bookmarks receive metadata enrichment, including `http://` URLs. `javascript:` and `data:` bookmarklets are retained but are not sent to the metadata or preview fetchers.
 
 ## Export Behavior
 
-Choose **Menu > Export** to download a Netscape/Chrome-compatible bookmark HTML file. Tags are exported as folders so browsers can import the file; bookmarks with multiple tags appear under each matching exported folder.
+Choose **Menu > Export** to download a Netscape/Chrome-compatible bookmark HTML file. Tags are exported as folders so browsers can import the file; bookmarks with multiple tags appear under each matching exported folder. Okini-specific VPN-required state is preserved with a custom `VPN_REQUIRED="1"` attribute, which browsers ignore during ordinary imports.
 
 Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standard ports. Private/local address ranges, application-origin URLs, credential-bearing URLs, and redirects that leave the public boundary are rejected. Redirects are capped, response bodies are bounded, and remote requests use `no-store` caching.
 
@@ -346,21 +356,25 @@ The exported document intentionally uses the legacy Netscape bookmark exchange m
 ## Features
 
 - Import UTF-8 and legacy Japanese Chrome bookmark HTML exports with progress feedback and automatic reload
-- Fetch redirect-resolved URLs, titles, descriptions, and favicons with legacy Japanese encoding support
+- Fetch redirect-resolved URLs, titles, descriptions, and absolute favicon URLs, including relative SVG icon links, with legacy Japanese encoding support
 - Create, read, update, and delete bookmarks and tags
 - Import Chrome bookmark folders as tags
 - Search across title, URL, description, and notes
 - Search by tag name
 - Filter favorites independently of the selected tag
 - Add tags directly from the bookmark editor
+- Show tags on bookmark cards without making them filter controls
 - Toggle favorites from bookmark cards
+- Keep favorite bookmarks at the top of the current list
+- Mark links that require VPN and show a VPN badge on their cards
 - Export bookmarks as Chrome-compatible HTML
 - Enable JSON/XML pretty view per bookmark
 - Highlight JSON/XML with `highlight.js` and make embedded HTTP(S) URLs actionable
+- Search within Pretty view and navigate backward/forward between previewed URLs
 - Switch between Japanese and English without changing control dimensions
 - Use light, dark, or device-controlled color modes
 - Match supported iOS Safari and Android browser bars to the active color mode
-- Use native HTML dialogs, explicit form labels, visible keyboard focus, and reduced-motion preferences in line with current HTML and WCAG guidance
+- Use native HTML dialogs, explicit form labels, visible keyboard focus, touch-safe header actions, and reduced-motion preferences in line with current HTML and WCAG guidance
 - Work across phone, tablet, desktop, and iOS Safari layouts
 - Fully reset all bookmark data stored in D1
 - Optionally authenticate pages and APIs through a configurable OIDC provider
@@ -437,8 +451,7 @@ src/
 
 | Table | Responsibility |
 | --- | --- |
-| `bookmarks` | URL, title, description, notes, favicon URL, favorite flag, and structured-preview flag |
-| `folders` | Legacy compatibility table; imported folders are represented as tags in the app |
+| `bookmarks` | URL, title, description, notes, favicon URL, favorite flag, VPN-required flag, and structured-preview flag |
 | `tags` | Unique tag names |
 | `bookmark_tags` | Many-to-many bookmark/tag relationships |
 
@@ -450,8 +463,6 @@ The archive field is not part of the current schema. Theme colors are controlled
 | --- | --- | --- |
 | `/api/bookmarks` | `GET`, `POST` | Filter/list and create bookmarks |
 | `/api/bookmarks/:id` | `GET`, `PATCH`, `DELETE` | Read, update, and delete one bookmark |
-| `/api/folders` | `GET`, `POST` | List and create folders |
-| `/api/folders/:id` | `PATCH`, `DELETE` | Update or recursively delete a folder |
 | `/api/tags` | `GET`, `POST` | List and create tags |
 | `/api/tags/:id` | `PATCH`, `DELETE` | Update and delete a tag |
 | `/api/metadata` | `POST` | Resolve an HTTP(S) URL and fetch metadata |
@@ -465,15 +476,18 @@ The archive field is not part of the current schema. Theme colors are controlled
 JSON responses use `no-store` and `nosniff` headers. Runtime validation rejects malformed input before repository operations. Deployed responses also set CSP, clickjacking, referrer, cross-origin, HSTS, and cache-control headers; static assets use explicit immutable or revalidation-friendly cache rules.
 When OIDC is configured, every API endpoint requires an authenticated session and returns `401` instead of redirecting an unauthenticated API request. When OIDC is not configured, APIs remain available without a login session.
 
-## Author
-### halka
-
-- [Website halka.jp](https://halka.jp)
-- [Website rjch.jp](https://rjch.jp)
-
 ## Contributing
 
 Contributions are welcome! Feel free to open an issue to report a bug or suggest a feature, or submit a pull request with improvements to the code, documentation, or Docker/container setup.
 
 ## LICENSE
 MIT
+
+## Author
+### halka
+
+- [Website halka.jp](https://halka.jp)
+- [Website rjch.jp](https://rjch.jp)
+
+### Make in Goryokaku
+![Goryokaku Finish](public/madeingoryokaku_mini.svg)

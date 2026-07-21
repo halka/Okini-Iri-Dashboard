@@ -1,0 +1,1 @@
+ALTER TABLE bookmarks ADD COLUMN vpn_required INTEGER NOT NULL DEFAULT 0;

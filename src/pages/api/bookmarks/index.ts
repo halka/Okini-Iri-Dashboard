@@ -24,6 +24,7 @@ type Payload = {
   description?: string;
   notes?: string;
   favorite?: boolean;
+  vpnRequired?: boolean;
   structuredPreviewEnabled?: boolean;
   tagIds?: string[];
 };
@@ -49,11 +50,12 @@ export const POST: APIRoute = apiRoute(async ({ locals, request }) => {
   const result = await createBookmark(getDb(locals), {
     title,
     url,
-    faviconUrl: optionalText(body.faviconUrl, "faviconUrl", 4_096),
+    faviconUrl: optionalText(body.faviconUrl, "faviconUrl", 65_536),
     folderId: optionalNullableId(body.folderId, "folderId") ?? null,
     description: optionalText(body.description, "description", 5_000),
     notes: optionalText(body.notes, "notes", 20_000),
     favorite: optionalBoolean(body.favorite, "favorite"),
+    vpnRequired: optionalBoolean(body.vpnRequired, "vpnRequired"),
     structuredPreviewEnabled: optionalBoolean(body.structuredPreviewEnabled, "structuredPreviewEnabled"),
     tagIds: optionalStringArray(body.tagIds, "tagIds")
   });

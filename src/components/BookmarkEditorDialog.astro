@@ -13,7 +13,6 @@ const { t } = Astro.props;
 <dialog id="editor" aria-labelledby="editorTitle">
   <form id="bookmarkForm" method="dialog" class="editor-form">
     <input type="hidden" name="id" />
-    <input type="hidden" name="faviconUrl" />
     <header>
       <h3 id="editorTitle" data-i18n="newLink">{t.newLink}</h3>
       <button type="button" id="closeEditor" aria-label={t.close} data-i18n-aria-label="close">×</button>
@@ -27,6 +26,16 @@ const { t } = Astro.props;
       <div id="faviconPreview" class="favicon preview-favicon"></div>
       <p id="metadataStatus" role="status" data-i18n="metadataIdle">{t.metadataIdle}</p>
       <button id="fetchMetadataButton" type="button" data-i18n="refetch">{t.refetch}</button>
+    </div>
+    <div class="favicon-control">
+      <label>
+        <span data-i18n="favicon">{t.favicon}</span>
+        <input name="faviconUrl" type="url" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="65536" placeholder="https://example.com/favicon.ico" />
+      </label>
+      <label class="file-button favicon-upload-button">
+        <span data-i18n="upload">{t.upload}</span>
+        <input id="faviconUploadInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/x-icon,image/vnd.microsoft.icon,.ico" aria-label={t.favicon} data-i18n-aria-label="favicon" />
+      </label>
     </div>
     <label>
       <span data-i18n="title">{t.title}</span>
@@ -54,6 +63,13 @@ const { t } = Astro.props;
         <span>
           <strong data-i18n="favorite">{t.favorite}</strong>
           <small data-i18n="favoriteHint">{t.favoriteHint}</small>
+        </span>
+      </label>
+      <label class="switch-card">
+        <input name="vpnRequired" type="checkbox" />
+        <span>
+          <strong data-i18n="vpnRequired">{t.vpnRequired}</strong>
+          <small data-i18n="vpnRequiredHint">{t.vpnRequiredHint}</small>
         </span>
       </label>
       <label class="switch-card">

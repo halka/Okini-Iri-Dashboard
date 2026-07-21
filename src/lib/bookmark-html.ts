@@ -69,7 +69,8 @@ export function parseChromeBookmarksHtml(html: string, source = "uploaded-bookma
       url: attr(attrs, "HREF"),
       folderId,
       sortOrder: bookmarks.filter((bookmark) => bookmark.folderId === folderId).length,
-      addDate: Number(attr(attrs, "ADD_DATE")) || null
+      addDate: Number(attr(attrs, "ADD_DATE")) || null,
+      vpnRequired: attr(attrs, "VPN_REQUIRED") === "1"
     });
     cursor = contentEnd + html.slice(contentEnd).match(/^<\/A>/i)![0].length;
   }
