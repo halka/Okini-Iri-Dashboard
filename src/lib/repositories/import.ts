@@ -3,19 +3,18 @@ import { isSupportedBookmarkUrl } from "../http";
 import { fetchUrlMetadata } from "../metadata";
 import type { RemoteFetchOptions } from "../remote-fetch";
 import { resetAllData } from "./reset";
+import { isReservedTagName } from "./tags";
 
-type NormalizedFolder = {
-  id: string;
-  name: string;
-  parentId: string | null;
-  sortOrder: number;
+type ImportMode = {
+  append?: boolean;
+  force?: boolean;
 };
 
 type NormalizedBookmark = {
   id: string;
   title: string;
   url: string;
-  folderId: string | null;
+  tagNames: string[];
   description: string;
   faviconUrl: string;
   sortOrder: number;
@@ -23,16 +22,19 @@ type NormalizedBookmark = {
 };
 
 const IMPORT_CONCURRENCY = 6;
+const defaultImportTagColor = "#4f8cff";
 
 export async function importChromeBookmarks(
   db: D1Database,
   input: ChromeBookmarksImport,
-  force = false,
+  mode: ImportMode = {},
   remoteFetchOptions: RemoteFetchOptions = {}
 ) {
   const current = await db.prepare("SELECT COUNT(*) AS count FROM bookmarks").first<{ count: number }>();
-  if (!force && (current?.count ?? 0) > 0) {
-    return { skipped: true, folders: 0, bookmarks: 0 };
+  const append = Boolean(mode.append);
+  const force = Boolean(mode.force);
+  if (!force && !append && (current?.count ?? 0) > 0) {
+    return { skipped: true, tags: 0, bookmarks: 0 };
   }
 
   const normalized = normalizeImportedBookmarks(input);
@@ -44,42 +46,36 @@ export async function importChromeBookmarks(
 
   if (force) await resetAllData(db);
 
-  const statements = [
-    ...normalized.folders.map((folder) =>
-      db
-        .prepare(
-          `INSERT OR REPLACE INTO folders (id, name, parent_id, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-        )
-        .bind(folder.id, folder.name, folder.parentId, folder.sortOrder)
-    ),
-    ...enrichedBookmarks.map((bookmark) =>
-      db
-        .prepare(
-          `INSERT OR REPLACE INTO bookmarks
-            (id, title, url, favicon_url, folder_id, description, sort_order, add_date, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-        )
-        .bind(
-          bookmark.id,
-          bookmark.title,
-          bookmark.url,
-          bookmark.faviconUrl,
-          bookmark.folderId,
-          bookmark.description,
-          bookmark.sortOrder,
-          bookmark.addDate
-        )
-    )
-  ];
+  await upsertTags(db, normalized.tagNames);
+  const tagIds = await tagIdsByName(db);
 
-  for (let index = 0; index < statements.length; index += 50) {
-    await db.batch(statements.slice(index, index + 50));
+  const bookmarkStatements = enrichedBookmarks.map((bookmark) =>
+    db
+      .prepare(
+        `INSERT INTO bookmarks
+          (id, title, url, favicon_url, folder_id, description, sort_order, add_date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+      )
+      .bind(bookmark.id, bookmark.title, bookmark.url, bookmark.faviconUrl, bookmark.description, bookmark.sortOrder, bookmark.addDate)
+  );
+  for (let index = 0; index < bookmarkStatements.length; index += 50) {
+    await db.batch(bookmarkStatements.slice(index, index + 50));
+  }
+
+  const tagStatements = enrichedBookmarks.flatMap((bookmark) =>
+    bookmark.tagNames
+      .map((name) => tagIds.get(tagKey(name)))
+      .filter((tagId): tagId is string => Boolean(tagId))
+      .map((tagId) => db.prepare("INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)").bind(bookmark.id, tagId))
+  );
+  for (let index = 0; index < tagStatements.length; index += 50) {
+    await db.batch(tagStatements.slice(index, index + 50));
   }
 
   return {
     skipped: false,
-    folders: normalized.folders.length,
+    tags: normalized.tagNames.length,
+    folders: normalized.tagNames.length,
     bookmarks: enrichedBookmarks.length
   };
 }
@@ -89,47 +85,47 @@ function normalizeImportedBookmarks(input: ChromeBookmarksImport) {
   const importedBookmarkItems = (input.bookmarks ?? []).filter(
     (bookmark) => bookmark.url?.trim() && isSupportedBookmarkUrl(bookmark.url)
   );
-  const folders: NormalizedFolder[] = [];
-  const folderNameToId = new Map<string, string>();
+  const folderNames = new Map<string, string>();
+  const folderPaths = new Map<string, string[]>();
 
-  for (const [index, folder] of importedFolders.entries()) {
+  for (const folder of importedFolders) {
     const name = folder.name?.trim();
     if (!name || name === "ブックマーク バー") continue;
-    const id = folder.id || `folder_${String(index + 1).padStart(4, "0")}_${slugPart(name) || "item"}`;
-    folderNameToId.set(name, id);
-    folders.push({
-      id,
-      name,
-      parentId: folder.parentId ?? null,
-      sortOrder: folder.sortOrder ?? folders.length
-    });
+    const id = folder.id || name;
+    folderNames.set(id, name);
   }
 
-  for (const bookmark of importedBookmarkItems) {
-    const folderName = (bookmark.folderName ?? bookmark.folder ?? "").trim();
-    if (!folderName || folderNameToId.has(folderName)) continue;
-    const id = `folder_${String(folders.length + 1).padStart(4, "0")}_${slugPart(folderName) || "item"}`;
-    folderNameToId.set(folderName, id);
-    folders.push({ id, name: folderName, parentId: null, sortOrder: folders.length });
+  function pathFor(folderId: string | null | undefined): string[] {
+    if (!folderId) return [];
+    const cached = folderPaths.get(folderId);
+    if (cached) return cached;
+    const folder = importedFolders.find((item) => (item.id || item.name) === folderId);
+    const name = folderNames.get(folderId) ?? folder?.name?.trim() ?? "";
+    const parentPath = folder?.parentId ? pathFor(folder.parentId) : [];
+    const path = name && name !== "ブックマーク バー" ? [...parentPath, name] : parentPath;
+    folderPaths.set(folderId, path);
+    return path;
   }
 
-  const validFolderIds = new Set(folders.map((folder) => folder.id));
   const bookmarks = importedBookmarkItems.map((bookmark, index): NormalizedBookmark => {
-    const folderName = (bookmark.folderName ?? bookmark.folder ?? "").trim();
-    const requestedFolderId = bookmark.folderId ?? (folderName ? folderNameToId.get(folderName) ?? null : null);
+    const fallbackFolderName = (bookmark.folderName ?? bookmark.folder ?? "").trim();
+    const tagNames = uniqueNames([...(bookmark.folderId ? pathFor(bookmark.folderId) : []), fallbackFolderName]).filter(
+      (name) => !isReservedTagName(name)
+    );
     return {
-      id: bookmark.id || `bookmark_${String(index + 1).padStart(5, "0")}`,
+      id: crypto.randomUUID(),
       title: (bookmark.title ?? bookmark.name ?? "").trim(),
       url: bookmark.url.trim(),
-      folderId: requestedFolderId && validFolderIds.has(requestedFolderId) ? requestedFolderId : null,
+      tagNames,
       description: bookmark.description?.trim() ?? "",
       faviconUrl: bookmark.faviconUrl?.trim() ?? "",
       sortOrder: bookmark.sortOrder ?? index,
       addDate: bookmark.addDate ?? null
     };
   });
+  const tagNames = uniqueNames(bookmarks.flatMap((bookmark) => bookmark.tagNames));
 
-  return { folders, bookmarks };
+  return { tagNames, bookmarks };
 }
 
 async function enrichBookmark(bookmark: NormalizedBookmark, remoteFetchOptions: RemoteFetchOptions): Promise<NormalizedBookmark> {
@@ -151,6 +147,22 @@ async function enrichBookmark(bookmark: NormalizedBookmark, remoteFetchOptions: 
   }
 }
 
+async function upsertTags(db: D1Database, tagNames: string[]) {
+  const statements = tagNames.filter((name) => !isReservedTagName(name)).map((name) =>
+    db
+      .prepare("INSERT OR IGNORE INTO tags (id, name, primary_color, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)")
+      .bind(crypto.randomUUID(), name, defaultImportTagColor)
+  );
+  for (let index = 0; index < statements.length; index += 50) {
+    await db.batch(statements.slice(index, index + 50));
+  }
+}
+
+async function tagIdsByName(db: D1Database) {
+  const result = await db.prepare("SELECT id, name FROM tags WHERE lower(name) NOT IN ('untagged')").all<{ id: string; name: string }>();
+  return new Map(result.results.map((tag) => [tagKey(tag.name), tag.id]));
+}
+
 async function mapConcurrent<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>) {
   const results = new Array<R>(items.length);
   let nextIndex = 0;
@@ -166,18 +178,23 @@ async function mapConcurrent<T, R>(items: T[], concurrency: number, mapper: (ite
   return results;
 }
 
+function uniqueNames(values: string[]) {
+  const names = new Map<string, string>();
+  for (const value of values) {
+    const name = value.trim();
+    if (name) names.set(tagKey(name), name);
+  }
+  return [...names.values()];
+}
+
+function tagKey(value: string) {
+  return value.normalize("NFKC").trim().toLowerCase();
+}
+
 function safeImportedTitle(url: string) {
   try {
     return new URL(url).hostname || url.split(":", 1)[0] || url;
   } catch {
     return url;
   }
-}
-
-function slugPart(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 32);
 }

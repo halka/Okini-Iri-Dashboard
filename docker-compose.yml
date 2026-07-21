@@ -5,8 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: okini-iri-dashboard
     ports:
-      # Host port 8787 → container port 8787 (wrangler dev default)
-      - "8787:8787"
+      # Set PORT in .env to change the host port. The container keeps Wrangler's default.
+      - "${PORT:-8787}:8787"
     volumes:
       # Persist local D1 database and KV state across restarts
       - wrangler_data:/app/.wrangler

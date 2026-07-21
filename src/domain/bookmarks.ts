@@ -4,8 +4,6 @@ export type Tag = {
   primaryColor: string;
 };
 
-export const UNCATEGORIZED_FOLDER_FILTER_ID = "__uncategorized";
-
 export type Folder = {
   id: string;
   name: string;
@@ -51,7 +49,7 @@ export type BookmarkPatch = Partial<BookmarkInput>;
 
 export type BookmarkFilters = {
   query?: string;
-  folderId?: string;
+  tagId?: string;
   favorite?: boolean;
 };
 

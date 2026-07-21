@@ -36,31 +36,12 @@ const identity = authenticationDisabled ? t.authenticationDisabled : user.email 
       }
     </section>
 
-    <nav class="menu-list" aria-label={t.manageData}>
-      <button type="button" id="openFolderManager" class="menu-action" data-i18n="folderManagement">{t.folderManagement}</button>
+    <div class="menu-list">
       <button type="button" id="openTagManager" class="menu-action" data-i18n="tagManagement">{t.tagManagement}</button>
       <button type="button" id="openImportManager" class="menu-action" data-i18n="import">{t.import}</button>
+      <a id="exportBookmarks" class="menu-action" href="/api/export" download="okini-iri-bookmarks.html" data-i18n="exportBookmarks">{t.exportBookmarks}</a>
       <button type="button" id="openSystemSettings" class="menu-action" data-i18n="systemSettings">{t.systemSettings}</button>
-    </nav>
-  </section>
-</dialog>
-
-<dialog id="folderManager" aria-labelledby="folderManagerTitle">
-  <section class="manager-panel">
-    <header>
-      <h3 id="folderManagerTitle" data-i18n="folderManagement">{t.folderManagement}</h3>
-      <button type="button" id="closeFolderManager" aria-label={t.close} data-i18n-aria-label="close">×</button>
-    </header>
-
-    <section class="manager-section">
-      <h4 data-i18n="folders">{t.folders}</h4>
-      <p data-i18n="emptyFoldersOnly">{t.emptyFoldersOnly}</p>
-      <form id="folderForm" class="compact-form">
-        <input name="name" type="text" aria-label={t.newFolderPlaceholder} maxlength="200" placeholder={t.newFolderPlaceholder} required data-i18n-placeholder="newFolderPlaceholder" data-i18n-aria-label="newFolderPlaceholder" />
-        <button type="submit" title={t.addFolderTitle} data-i18n="add" data-i18n-title="addFolderTitle">{t.add}</button>
-      </form>
-      <div id="folderManageList" class="manage-list"></div>
-    </section>
+    </div>
   </section>
 </dialog>
 
@@ -76,7 +57,6 @@ const identity = authenticationDisabled ? t.authenticationDisabled : user.email 
       <p data-i18n="tagManageHint">{t.tagManageHint}</p>
       <form id="tagForm" class="compact-form">
         <input name="name" type="text" aria-label={t.tagNamePlaceholder} maxlength="100" placeholder={t.tagNamePlaceholder} required data-i18n-placeholder="tagNamePlaceholder" data-i18n-aria-label="tagNamePlaceholder" />
-        <input name="primaryColor" type="color" value="#4f8cff" aria-label={t.tagColor} data-i18n-aria-label="tagColor" />
         <button type="submit" title={t.addTagTitle} data-i18n="add" data-i18n-title="addTagTitle">{t.add}</button>
       </form>
       <div id="tagManageList" class="manage-list"></div>
@@ -96,6 +76,10 @@ const identity = authenticationDisabled ? t.authenticationDisabled : user.email 
         <h4 data-i18n="importBookmarks">{t.importBookmarks}</h4>
         <p data-i18n="importBookmarksHint">{t.importBookmarksHint}</p>
       </div>
+      <label class="append-import-control">
+        <input id="appendImportCheckbox" type="checkbox" checked />
+        <span data-i18n="appendImport">{t.appendImport}</span>
+      </label>
       <label class="file-button">
         <span data-i18n="chooseBookmarkHtml">{t.chooseBookmarkHtml}</span>
         <input id="bookmarkHtmlInput" type="file" accept=".html,.htm,text/html" />

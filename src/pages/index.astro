@@ -29,8 +29,8 @@ if (!user) throw new Error("Authenticated user is unavailable");
     <BookmarkEditorDialog t={t} />
     <DataManagerDialog t={t} user={user} />
     <PreviewDialogs t={t} />
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <div id="importOverlay" class="import-overlay" role="status" aria-live="assertive" hidden>
+    <div id="toast" class="toast" role="status"></div>
+    <div id="importOverlay" class="import-overlay" role="status" hidden>
       <div class="import-progress">
         <span class="spinner" aria-hidden="true"></span>
         <strong data-i18n="importingBookmarks">{t.importingBookmarks}</strong>

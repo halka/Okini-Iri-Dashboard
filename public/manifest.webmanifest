@@ -1,0 +1,23 @@
+{
+  "id": "/",
+  "name": "Okini",
+  "short_name": "Okini",
+  "lang": "ja",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#fafafa",
+  "color_scheme_dark": {
+    "background_color": "#323232",
+    "theme_color": "#323232"
+  },
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

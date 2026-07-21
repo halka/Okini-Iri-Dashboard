@@ -34,11 +34,23 @@ Open [http://localhost:8787](http://localhost:8787), then choose **Menu > Import
 ## Using the Dashboard
 
 1. Select **Add**, enter a URL, and move focus away from the URL field. The dashboard automatically fetches the resolved URL, title, description, and favicon. Use **Fetch** or **Refetch** only when you want to run that step manually.
-2. Review the fetched fields, choose a folder and tags, then save the bookmark. New folders and color-coded tags can also be created from the editor.
-3. Use search, **All**, **Uncategorized**, a folder, or **Favorites** to narrow the list. Selecting the app title in the header clears active filters and returns to the top.
+2. Review the fetched fields, choose tags, then save the bookmark. New tags can also be created from the editor.
+3. Use search, **All**, a tag, or **Favorites** to narrow the list. Search includes tag names. Selecting the app title in the header clears active filters and returns to the top.
 4. Bookmark cards always show the URL. Select **Description / notes** for the full text, or **Pretty view** when JSON/XML preview is enabled for that bookmark.
 
-The header menu keeps account information and sign-out controls separate from **Manage folders**, **Manage tags**, **Import**, and **System settings**. System settings contains the full-reset control.
+The header menu keeps account information and sign-out controls separate from **Manage tags**, **Import**, **Export**, and **System settings**. System settings contains the full-reset control.
+
+## Mobile Browser Colors
+
+The top and bottom browser areas follow the dashboard's active theme in iOS/iPadOS Safari 26 and later and in Android browsers that support `theme-color`.
+
+- Separate light and dark `theme-color` declarations follow the device color scheme when **Auto** is selected.
+- Switching to **Light** or **Dark** updates the active browser color immediately and disables the inactive declaration.
+- The root page background uses the same color, keeping overscroll and edge-to-edge browser areas visually continuous.
+- The Web App Manifest provides matching light and dark `theme_color` and `background_color` values for installed web apps.
+- `viewport-fit=cover` and safe-area insets keep controls clear of sensor housings and gesture navigation areas.
+
+This supports Safari Home Screen web apps and edge-to-edge layouts in Chrome 135 and later on Android. Browser UI remains controlled by the browser, so it may slightly adjust the requested color to preserve toolbar contrast.
 
 ## Table of Contents
 
@@ -46,6 +58,7 @@ The header menu keeps account information and sign-out controls separate from **
   - [Screenshot](#screenshot)
   - [Quick Start](#quick-start)
   - [Using the Dashboard](#using-the-dashboard)
+  - [Mobile Browser Colors](#mobile-browser-colors)
   - [Requirements](#requirements)
   - [Cloudflare Setup](#cloudflare-setup)
     - [OIDC Setup](#oidc-setup)
@@ -54,6 +67,7 @@ The header menu keeps account information and sign-out controls separate from **
   - [Docker](#docker)
   - [Apple Container](#apple-container)
   - [Import Behavior](#import-behavior)
+  - [Export Behavior](#export-behavior)
   - [Reset Behavior](#reset-behavior)
   - [Scripts](#scripts)
   - [Features](#features)
@@ -171,7 +185,8 @@ The repository ships a multi-stage `Dockerfile` and a `docker-compose.yml` so th
 | File | Purpose |
 | --- | --- |
 | `Dockerfile` | Builder stage compiles the Astro Worker; runner stage applies D1 migrations and starts `wrangler dev` |
-| `docker-compose.yml` | Maps port 8787, mounts the persistence volume, and exposes optional OIDC environment variables |
+| `docker-compose.yml` | Maps the configurable host port, mounts the persistence volume, and exposes optional OIDC environment variables |
+| `.env.example` | Documents the optional host port and OIDC secret environment variables |
 | `.dockerignore` | Excludes `node_modules/`, `.wrangler/`, `.git/`, and other large paths from the build context |
 
 **Quick start**
@@ -184,7 +199,13 @@ docker compose up --build
 docker compose up
 ```
 
-Open [http://localhost:8787](http://localhost:8787).
+The `.env` file is optional. To expose the dashboard on a different host port, create it in the project root and set `PORT`:
+
+```env
+PORT=8080
+```
+
+Open [http://localhost:8787](http://localhost:8787) when `PORT` is unset or empty. Otherwise, use the configured port, such as `http://localhost:8080`.
 
 **Data persistence**
 
@@ -239,7 +260,7 @@ container system start
 | File | Purpose |
 | --- | --- |
 | `Dockerfile` | Same OCI-compatible image used by Docker — no changes needed |
-| `container-run.sh` | Convenience script that builds the image, creates a named volume, and runs the container |
+| `container-run.sh` | Loads `.env`, builds the image, creates a named volume, and runs the container |
 
 **Quick start**
 
@@ -257,7 +278,7 @@ container system start
 ./container-run.sh stop
 ```
 
-Open [http://localhost:8787](http://localhost:8787).
+`container-run.sh` uses the same optional project-root `.env` file as Docker Compose. Set `PORT=8080` to expose the dashboard on port 8080; when `PORT` is unset or empty, it uses port 8787.
 
 **Data persistence**
 
@@ -289,13 +310,19 @@ When D1 has no bookmarks and no search or filter is active, the workspace presen
 
 The importer accepts Chrome `.html` or `.htm` exports up to 10 MiB. UTF-8, Shift_JIS (including Windows-31J), EUC-JP, and ISO-2022-JP input is detected and converted to Unicode before it is sent as UTF-8 JSON. URL metadata and structured preview responses use the same conversion boundary. The importer closes the **Import** screen after file selection, shows an indeterminate progress overlay, imports metadata with bounded concurrency, and reloads after success.
 
-The parser excludes Chrome's synthetic root folder named `ブックマーク バー` or `Bookmarks bar`. HTTP(S) bookmarks receive metadata enrichment. `javascript:` and `data:` bookmarklets are retained but are not sent to the metadata or preview fetchers.
+The parser excludes Chrome's synthetic root folder named `ブックマーク バー` or `Bookmarks bar`. Imported folders become tags, including nested folder names. The **Append to existing links** option adds another bookmark export without clearing current links; turning it off replaces the current data after confirmation. HTTP(S) bookmarks receive metadata enrichment, including `http://` URLs. `javascript:` and `data:` bookmarklets are retained but are not sent to the metadata or preview fetchers.
+
+## Export Behavior
+
+Choose **Menu > Export** to download a Netscape/Chrome-compatible bookmark HTML file. Tags are exported as folders so browsers can import the file; bookmarks with multiple tags appear under each matching exported folder.
 
 Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standard ports. Private/local address ranges, application-origin URLs, credential-bearing URLs, and redirects that leave the public boundary are rejected. Redirects are capped, response bodies are bounded, and remote requests use `no-store` caching.
 
+The exported document intentionally uses the legacy Netscape bookmark exchange markup required by browser importers. It is a compatibility file, not application page markup.
+
 ## Reset Behavior
 > [!CAUTION]
-> Full reset deletes bookmarks, folders, tags, and bookmark/tag relationships. It does not delete UI preferences. This operation cannot be undone.
+> Full reset deletes bookmarks, tags, and bookmark/tag relationships. It does not delete UI preferences. This operation cannot be undone.
 
 ## Scripts
 
@@ -320,17 +347,20 @@ Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standa
 
 - Import UTF-8 and legacy Japanese Chrome bookmark HTML exports with progress feedback and automatic reload
 - Fetch redirect-resolved URLs, titles, descriptions, and favicons with legacy Japanese encoding support
-- Create, read, update, and delete bookmarks, folders, and tags
-- Delete a folder together with its nested folders and bookmarks
+- Create, read, update, and delete bookmarks and tags
+- Import Chrome bookmark folders as tags
 - Search across title, URL, description, and notes
-- Filter favorites independently of the selected folder
-- Add folders and tags directly from the bookmark editor
-- Choose tag colors when creating or editing tags
+- Search by tag name
+- Filter favorites independently of the selected tag
+- Add tags directly from the bookmark editor
 - Toggle favorites from bookmark cards
+- Export bookmarks as Chrome-compatible HTML
 - Enable JSON/XML pretty view per bookmark
 - Highlight JSON/XML with `highlight.js` and make embedded HTTP(S) URLs actionable
 - Switch between Japanese and English without changing control dimensions
 - Use light, dark, or device-controlled color modes
+- Match supported iOS Safari and Android browser bars to the active color mode
+- Use native HTML dialogs, explicit form labels, visible keyboard focus, and reduced-motion preferences in line with current HTML and WCAG guidance
 - Work across phone, tablet, desktop, and iOS Safari layouts
 - Fully reset all bookmark data stored in D1
 - Optionally authenticate pages and APIs through a configurable OIDC provider
@@ -356,6 +386,9 @@ Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standa
 - `src/config/settings.ts`: OGP defaults and OIDC setting contracts
 - `src/config/preferences.ts`: supported locales, color modes, and defaults
 - `src/i18n/messages.ts`: all visible Japanese and English strings
+- `src/components/AppHead.astro`: browser capability, viewport, color-scheme, and theme-color metadata
+- `public/theme-boot.js`: pre-render theme resolution and browser-color synchronization
+- `public/manifest.webmanifest`: installed-app identity and light/dark launch colors
 - `src/styles/global.css`: light/dark tokens and presentation colors
 - Worker variables and secrets: OIDC provider metadata, client credentials, allowlists, and session lifetime
 
@@ -391,11 +424,11 @@ src/
 
 ### Responsibility Boundaries
 
-- D1 stores bookmarks, folders, tags, and their relationships. Schema changes happen only through versioned migrations.
+- D1 stores bookmarks, tags, bookmark/tag relationships, and a legacy folder table retained for compatibility. Schema changes happen only through versioned migrations.
 - `PREFERENCES` KV stores locale, color-mode, OGP metadata, and non-secret OIDC settings. It does not store bookmark records, visual color values, or OIDC client secrets.
 - `SESSION` KV stores OIDC transactions, authenticated-user sessions, and the ID token used for provider logout.
 - OIDC client secrets are Worker secrets, never D1 or KV domain records. Environment variables override matching KV-backed OIDC policy settings.
-- CSS owns theme tokens and presentation. Tag colors are stored with tag records in D1.
+- CSS owns theme tokens and presentation.
 - API routes validate HTTP input and delegate persistence to repositories.
 - Browser modules own UI state and DOM behavior; they do not contain D1 or KV logic.
 - GET requests are read-only. Import and reset behavior is always explicit.
@@ -405,8 +438,8 @@ src/
 | Table | Responsibility |
 | --- | --- |
 | `bookmarks` | URL, title, description, notes, favicon URL, favorite flag, and structured-preview flag |
-| `folders` | Folder hierarchy and ordering |
-| `tags` | Unique tag names and primary colors |
+| `folders` | Legacy compatibility table; imported folders are represented as tags in the app |
+| `tags` | Unique tag names |
 | `bookmark_tags` | Many-to-many bookmark/tag relationships |
 
 The archive field is not part of the current schema. Theme colors are controlled by CSS variables.
@@ -424,6 +457,7 @@ The archive field is not part of the current schema. Theme colors are controlled
 | `/api/metadata` | `POST` | Resolve an HTTP(S) URL and fetch metadata |
 | `/api/preview` | `POST` | Fetch up to 1 MiB for JSON/XML preview |
 | `/api/import` | `POST` | Import Chrome bookmark HTML |
+| `/api/export` | `GET` | Export Chrome-compatible bookmark HTML |
 | `/api/preferences` | `GET`, `PATCH` | Read and update KV-backed UI preferences |
 | `/api/settings` | `GET`, `PATCH` | Read and update KV-backed app metadata and non-secret OIDC settings |
 | `/api/reset` | `DELETE` | Delete all D1 domain records |

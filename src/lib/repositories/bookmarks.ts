@@ -1,4 +1,4 @@
-import { UNCATEGORIZED_FOLDER_FILTER_ID, type Bookmark, type BookmarkFilters, type BookmarkInput, type BookmarkPatch } from "../../domain/bookmarks";
+import type { Bookmark, BookmarkFilters, BookmarkInput, BookmarkPatch } from "../../domain/bookmarks";
 import { mapBookmark, type D1Row } from "./mappers";
 
 const bookmarkSelect = `
@@ -13,7 +13,7 @@ const bookmarkSelect = `
   FROM bookmarks b
   LEFT JOIN folders f ON f.id = b.folder_id
   LEFT JOIN bookmark_tags bt ON bt.bookmark_id = b.id
-  LEFT JOIN tags t ON t.id = bt.tag_id
+  LEFT JOIN tags t ON t.id = bt.tag_id AND lower(t.name) NOT IN ('untagged')
 `;
 
 export async function listBookmarks(db: D1Database, filters: BookmarkFilters = {}): Promise<Bookmark[]> {
@@ -21,14 +21,24 @@ export async function listBookmarks(db: D1Database, filters: BookmarkFilters = {
   const binds: unknown[] = [];
 
   if (filters.query) {
-    where.push("(b.title LIKE ? OR b.url LIKE ? OR b.description LIKE ? OR b.notes LIKE ?)");
+    where.push(`(
+      b.title LIKE ? OR b.url LIKE ? OR b.description LIKE ? OR b.notes LIKE ? OR EXISTS (
+        SELECT 1
+        FROM bookmark_tags search_bt
+        INNER JOIN tags search_t ON search_t.id = search_bt.tag_id
+        WHERE search_bt.bookmark_id = b.id AND lower(search_t.name) NOT IN ('untagged') AND search_t.name LIKE ?
+      )
+    )`);
     const like = `%${filters.query}%`;
-    binds.push(like, like, like, like);
-  } else if (filters.folderId === UNCATEGORIZED_FOLDER_FILTER_ID && !filters.favorite) {
-    where.push("b.folder_id IS NULL");
-  } else if (filters.folderId && !filters.favorite) {
-    where.push("b.folder_id = ?");
-    binds.push(filters.folderId);
+    binds.push(like, like, like, like, like);
+  } else if (filters.tagId && !filters.favorite) {
+    where.push(`EXISTS (
+      SELECT 1
+      FROM bookmark_tags filter_bt
+      INNER JOIN tags filter_t ON filter_t.id = filter_bt.tag_id
+      WHERE filter_bt.bookmark_id = b.id AND filter_t.id = ? AND lower(filter_t.name) NOT IN ('untagged')
+    )`);
+    binds.push(filters.tagId);
   }
 
   if (filters.favorite) where.push("b.favorite = 1");
@@ -37,7 +47,7 @@ export async function listBookmarks(db: D1Database, filters: BookmarkFilters = {
     .prepare(`${bookmarkSelect}
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
       GROUP BY b.id
-      ORDER BY b.favorite DESC, f.sort_order, b.sort_order, b.updated_at DESC
+      ORDER BY f.sort_order, b.sort_order, b.created_at
       LIMIT 500`)
     .bind(...binds)
     .all<D1Row>();
@@ -51,6 +61,16 @@ export async function getBookmark(db: D1Database, id: string): Promise<Bookmark 
     .bind(id)
     .first<D1Row>();
   return row ? mapBookmark(row) : null;
+}
+
+export async function listBookmarksForExport(db: D1Database): Promise<Bookmark[]> {
+  const result = await db
+    .prepare(`${bookmarkSelect}
+      GROUP BY b.id
+      ORDER BY b.sort_order, b.created_at, b.updated_at`)
+    .all<D1Row>();
+
+  return result.results.map(mapBookmark);
 }
 
 export async function createBookmark(db: D1Database, input: BookmarkInput) {
@@ -113,7 +133,9 @@ function addUpdate(sets: string[], binds: unknown[], column: string, value: unkn
 
 async function setBookmarkTags(db: D1Database, bookmarkId: string, tagIds: string[]) {
   const statements = [db.prepare("DELETE FROM bookmark_tags WHERE bookmark_id = ?").bind(bookmarkId)];
-  for (const tagId of new Set(tagIds.filter(Boolean))) {
+  const validTags = await db.prepare("SELECT id FROM tags WHERE lower(name) NOT IN ('untagged')").all<{ id: string }>();
+  const validTagIds = new Set(validTags.results.map((tag) => tag.id));
+  for (const tagId of new Set(tagIds.filter((id) => id && validTagIds.has(id)))) {
     statements.push(
       db.prepare("INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)").bind(bookmarkId, tagId)
     );

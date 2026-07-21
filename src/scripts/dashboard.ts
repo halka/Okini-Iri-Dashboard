@@ -1,4 +1,4 @@
-import { UNCATEGORIZED_FOLDER_FILTER_ID, type Bookmark, type BookmarkInput, type Folder, type Tag } from "../domain/bookmarks";
+import type { Bookmark, BookmarkInput, Tag } from "../domain/bookmarks";
 import type { ColorMode } from "../config/preferences";
 import type { Locale, MessageKey } from "../i18n/messages";
 import { readTextBlob, UnsupportedTextEncodingError } from "../lib/text-encoding";
@@ -11,18 +11,16 @@ import { ThemeController } from "./lib/theme-controller";
 
 type DashboardState = {
   bookmarks: Bookmark[];
-  folders: Folder[];
   tags: Tag[];
-  folderId: string;
+  tagId: string;
   query: string;
   favoriteOnly: boolean;
 };
 
 const state: DashboardState = {
   bookmarks: [],
-  folders: [],
   tags: [],
-  folderId: "",
+  tagId: "",
   query: "",
   favoriteOnly: false
 };
@@ -31,7 +29,7 @@ const elements = {
   bookmarkList: byId<HTMLElement>("bookmarkList"),
   workspaceStatus: byId<HTMLElement>("workspaceStatus"),
   workspace: byId<HTMLElement>("workspace"),
-  folderSelect: byId<HTMLSelectElement>("folderSelect"),
+  tagSelect: byId<HTMLSelectElement>("tagSelect"),
   searchInput: byId<HTMLInputElement>("searchInput"),
   favoriteOnlyButton: byId<HTMLButtonElement>("favoriteOnly"),
   homeFilterButton: byId<HTMLButtonElement>("homeFilterButton"),
@@ -43,37 +41,53 @@ const elements = {
   editor: byId<HTMLDialogElement>("editor"),
   editorTitle: byId<HTMLElement>("editorTitle"),
   form: byId<HTMLFormElement>("bookmarkForm"),
-  editorTags: byId<HTMLSelectElement>("editorTags"),
+  editorTags: byId<HTMLElement>("editorTags"),
   deleteButton: byId<HTMLButtonElement>("deleteButton"),
   manager: byId<HTMLDialogElement>("manager"),
-  folderManager: byId<HTMLDialogElement>("folderManager"),
   tagManager: byId<HTMLDialogElement>("tagManager"),
   importManager: byId<HTMLDialogElement>("importManager"),
   systemSettings: byId<HTMLDialogElement>("systemSettings"),
-  folderManageList: byId<HTMLElement>("folderManageList"),
   tagManageList: byId<HTMLElement>("tagManageList"),
   bookmarkHtmlInput: byId<HTMLInputElement>("bookmarkHtmlInput"),
+  appendImportCheckbox: byId<HTMLInputElement>("appendImportCheckbox"),
   resetDataButton: byId<HTMLButtonElement>("resetDataButton"),
   importOverlay: byId<HTMLElement>("importOverlay"),
   metadataStatus: byId<HTMLElement>("metadataStatus"),
   faviconPreview: byId<HTMLElement>("faviconPreview"),
   fetchMetadataButton: byId<HTMLButtonElement>("fetchMetadataButton"),
-  inlineFolderForm: byId<HTMLElement>("inlineFolderForm"),
   inlineTagForm: byId<HTMLElement>("inlineTagForm"),
   structuredPreview: byId<HTMLDialogElement>("structuredPreview"),
   previewTitle: byId<HTMLElement>("previewTitle"),
   previewStatus: byId<HTMLElement>("previewStatus"),
   previewContent: byId<HTMLElement>("previewContent"),
+  previewBack: byId<HTMLButtonElement>("previewBack"),
+  previewForward: byId<HTMLButtonElement>("previewForward"),
+  previewSearchInput: byId<HTMLInputElement>("previewSearchInput"),
+  previewSearchPrevious: byId<HTMLButtonElement>("previewSearchPrevious"),
+  previewSearchNext: byId<HTMLButtonElement>("previewSearchNext"),
   bookmarkDetailsDialog: byId<HTMLDialogElement>("bookmarkDetailsDialog"),
   bookmarkDetailsTitle: byId<HTMLElement>("bookmarkDetailsTitle"),
+  bookmarkDetailsId: byId<HTMLElement>("bookmarkDetailsId"),
   bookmarkDetailsUrl: byId<HTMLAnchorElement>("bookmarkDetailsUrl"),
+  bookmarkDetailsDomain: byId<HTMLElement>("bookmarkDetailsDomain"),
+  bookmarkDetailsTags: byId<HTMLElement>("bookmarkDetailsTags"),
+  bookmarkDetailsFavorite: byId<HTMLElement>("bookmarkDetailsFavorite"),
+  bookmarkDetailsStructuredPreview: byId<HTMLElement>("bookmarkDetailsStructuredPreview"),
+  bookmarkDetailsFavicon: byId<HTMLElement>("bookmarkDetailsFavicon"),
   bookmarkDetailsDescription: byId<HTMLElement>("bookmarkDetailsDescription"),
   bookmarkDetailsNotes: byId<HTMLElement>("bookmarkDetailsNotes"),
+  bookmarkDetailsCreatedAt: byId<HTMLElement>("bookmarkDetailsCreatedAt"),
+  bookmarkDetailsUpdatedAt: byId<HTMLElement>("bookmarkDetailsUpdatedAt"),
+  bookmarkDetailsAddDate: byId<HTMLElement>("bookmarkDetailsAddDate"),
   previewLinkDialog: byId<HTMLDialogElement>("previewLinkDialog"),
   previewLinkUrl: byId<HTMLElement>("previewLinkUrl"),
   openPreviewLinkExternal: byId<HTMLButtonElement>("openPreviewLinkExternal"),
   openPreviewLinkInline: byId<HTMLButtonElement>("openPreviewLinkInline"),
   cancelPreviewLink: byId<HTMLButtonElement>("cancelPreviewLink"),
+  confirmDialog: byId<HTMLDialogElement>("confirmDialog"),
+  confirmDialogMessage: byId<HTMLElement>("confirmDialogMessage"),
+  confirmDialogAccept: byId<HTMLButtonElement>("confirmDialogAccept"),
+  confirmDialogCancel: byId<HTMLButtonElement>("confirmDialogCancel"),
   toast: byId<HTMLElement>("toast")
 };
 
@@ -88,6 +102,12 @@ let metadataTimer = 0;
 let metadataController: AbortController | null = null;
 let lastMetadataUrl = "";
 let preferenceSaveQueue = Promise.resolve();
+let pendingConfirm: ((confirmed: boolean) => void) | null = null;
+let previewHistory: { url: string; title: string }[] = [];
+let previewHistoryIndex = -1;
+let previewSearchIndex = -1;
+let previewSearchComposing = false;
+let previewSearchCompositionTimer = 0;
 
 async function savePreferences(input: Partial<{ locale: Locale; colorMode: ColorMode }>) {
   const request = preferenceSaveQueue.then(() =>
@@ -131,20 +151,18 @@ async function refresh() {
   elements.workspaceStatus.textContent = t("loading");
   const params = new URLSearchParams();
   if (state.query) params.set("q", state.query);
-  if (state.folderId && !state.query && !state.favoriteOnly) params.set("folderId", state.folderId);
+  if (state.tagId && !state.query && !state.favoriteOnly) params.set("tagId", state.tagId);
   if (state.favoriteOnly) params.set("favorite", "true");
 
   try {
-    const [{ bookmarks }, { folders }, { tags }] = await Promise.all([
+    const [{ bookmarks }, { tags }] = await Promise.all([
       requestJson<{ bookmarks: Bookmark[] }>(`/api/bookmarks?${params}`),
-      requestJson<{ folders: Folder[] }>("/api/folders"),
       requestJson<{ tags: Tag[] }>("/api/tags")
     ]);
     if (sequence !== refreshSequence) return;
     state.bookmarks = bookmarks;
-    state.folders = folders;
     state.tags = tags;
-    if (state.folderId && state.folderId !== UNCATEGORIZED_FOLDER_FILTER_ID && !folders.some((folder) => folder.id === state.folderId)) state.folderId = "";
+    if (state.tagId && !tags.some((tag) => tag.id === state.tagId)) state.tagId = "";
     render();
   } catch (error) {
     elements.workspaceStatus.textContent = error instanceof Error ? error.message : t("genericError");
@@ -155,21 +173,19 @@ async function refresh() {
 }
 
 function render() {
-  renderFolders();
+  renderTagFilter();
   renderFavoriteFilter();
   renderManager();
   renderBookmarks();
-  renderEditorFolders();
   renderEditorTags();
 }
 
-function renderFolders() {
-  elements.folderSelect.innerHTML = [
+function renderTagFilter() {
+  elements.tagSelect.innerHTML = [
     `<option value="">${escapeHtml(t("all"))}</option>`,
-    `<option value="${UNCATEGORIZED_FOLDER_FILTER_ID}">${escapeHtml(t("uncategorized"))}</option>`,
-    ...state.folders.map((folder) => `<option value="${escapeAttribute(folder.id)}">${escapeHtml(folderLabel(folder))}</option>`)
+    ...state.tags.map((tag) => `<option value="${escapeAttribute(tag.id)}">${escapeHtml(tag.name)}</option>`)
   ].join("");
-  elements.folderSelect.value = state.folderId;
+  elements.tagSelect.value = state.tagId;
 }
 
 function renderFavoriteFilter() {
@@ -178,16 +194,20 @@ function renderFavoriteFilter() {
 }
 
 function scrollWorkspaceToTop() {
-  elements.workspace.scrollTop = 0;
+  elements.homeFilterButton.classList.add("is-returning");
   elements.workspace.scrollTo({ top: 0, behavior: "smooth" });
   elements.moveToTopButton.hidden = true;
+  window.setTimeout(() => {
+    elements.homeFilterButton.classList.remove("is-returning");
+    elements.homeFilterButton.blur();
+  }, 450);
 }
 
 async function resetFilters() {
-  state.folderId = "";
+  state.tagId = "";
   state.query = "";
   state.favoriteOnly = false;
-  elements.folderSelect.value = "";
+  elements.tagSelect.value = "";
   elements.searchInput.value = "";
   renderFavoriteFilter();
   await refresh();
@@ -195,37 +215,17 @@ async function resetFilters() {
 }
 
 function renderManager() {
-  elements.folderManageList.innerHTML = state.folders.length
-    ? state.folders
-        .map(
-          (folder) => `<article class="manage-row folder-manage-row" data-folder-id="${escapeAttribute(folder.id)}">
-            <label>
-              <span class="visually-hidden">${escapeHtml(t("newFolderPlaceholder"))}</span>
-              <input name="name" type="text" value="${escapeAttribute(folder.name)}" maxlength="200" />
-            </label>
-            <span>${escapeHtml(folderUsageLabel(folder))}</span>
-            <button type="button" data-save-folder="${escapeAttribute(folder.id)}">${escapeHtml(t("save"))}</button>
-            <button type="button" class="danger" data-delete-folder="${escapeAttribute(folder.id)}">${escapeHtml(t("delete"))}</button>
-          </article>`
-        )
-        .join("")
-    : `<p class="empty">${escapeHtml(t("noFolders"))}</p>`;
-
   elements.tagManageList.innerHTML = state.tags.length
     ? state.tags
         .map(
-          (tag) => `<article class="manage-row tag-manage-row" data-tag-id="${escapeAttribute(tag.id)}">
+          (tag) => `<div class="manage-row tag-manage-row" data-tag-id="${escapeAttribute(tag.id)}">
             <label>
               <span class="visually-hidden">${escapeHtml(t("tagNamePlaceholder"))}</span>
               <input name="name" type="text" value="${escapeAttribute(tag.name)}" maxlength="100" />
             </label>
-            <label class="color-control">
-              <span class="visually-hidden">${escapeHtml(t("tagColor"))}</span>
-              <input name="primaryColor" type="color" value="${escapeAttribute(tag.primaryColor)}" />
-            </label>
             <button type="button" data-save-tag="${escapeAttribute(tag.id)}">${escapeHtml(t("save"))}</button>
             <button type="button" class="danger" data-delete-tag="${escapeAttribute(tag.id)}">${escapeHtml(t("delete"))}</button>
-          </article>`
+          </div>`
         )
         .join("")
     : `<p class="empty">${escapeHtml(t("noTags"))}</p>`;
@@ -234,11 +234,11 @@ function renderManager() {
 function renderBookmarks() {
   elements.workspaceStatus.textContent = state.bookmarks.length
     ? t("linksFound", { count: state.bookmarks.length })
-    : state.query || state.folderId || state.favoriteOnly
+    : state.query || state.tagId || state.favoriteOnly
       ? t("noLinks")
       : t("importBookmarks");
   if (!state.bookmarks.length) {
-    const isUnfilteredView = !state.query && !state.folderId && !state.favoriteOnly;
+    const isUnfilteredView = !state.query && !state.tagId && !state.favoriteOnly;
     elements.bookmarkList.innerHTML = isUnfilteredView
       ? `<section class="empty-panel first-run-panel">
           <h2>${escapeHtml(t("importBookmarks"))}</h2>
@@ -256,22 +256,19 @@ function renderBookmarks() {
   elements.bookmarkList.innerHTML = state.bookmarks
     .map((bookmark) => {
       const isOpenable = isHttpBookmarkUrl(bookmark.url);
-      const tags = bookmark.tags
-        .map((tag) => `<span class="pill tag-pill" style="--tag-color: ${escapeAttribute(tag.primaryColor)}">${escapeHtml(tag.name)}</span>`)
-        .join("");
       const previewAction =
         bookmark.structuredPreviewEnabled && isOpenable
-          ? `<button type="button" class="ghost-link preview-link card-top-action" data-preview="${escapeAttribute(bookmark.id)}">${escapeHtml(t("structuredPreview"))}</button>`
+          ? `<button type="button" class="ghost-link preview-link" data-preview="${escapeAttribute(bookmark.id)}">${escapeHtml(t("structuredPreview"))}</button>`
           : "";
       const main = isOpenable
-        ? `<a class="card-main" href="${escapeAttribute(bookmark.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="${escapeAttribute(t("openLinkLabel", { title: bookmark.title }))}">
+        ? `<a class="card-main-link" href="${escapeAttribute(bookmark.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="${escapeAttribute(t("openLinkLabel", { title: bookmark.title }))}">
           ${faviconHtml(bookmark)}
           <div>
             <h3>${escapeHtml(bookmark.title)}</h3>
             <span class="card-host">${escapeHtml(safeHost(bookmark.url))}</span>
           </div>
         </a>`
-        : `<div class="card-main" role="group">
+        : `<div class="card-main-link">
           ${faviconHtml(bookmark)}
           <div>
             <h3>${escapeHtml(bookmark.title)}</h3>
@@ -279,20 +276,15 @@ function renderBookmarks() {
           </div>
         </div>`;
       return `<article class="bookmark-card">
-        <div class="card-top">
+        <div class="card-main">
           ${main}
-          ${previewAction}
         </div>
-        <p class="card-url">${escapeHtml(bookmark.url)}</p>
-        <div class="card-meta">
-          <span>${escapeHtml(bookmark.folderName ?? t("uncategorized"))}</span>
-          <button type="button" class="favorite-toggle${bookmark.favorite ? " is-active" : ""}" data-favorite="${escapeAttribute(bookmark.id)}" aria-label="${escapeAttribute(t(bookmark.favorite ? "removeFavorite" : "addFavorite"))}" title="${escapeAttribute(t(bookmark.favorite ? "removeFavorite" : "addFavorite"))}">${bookmark.favorite ? "★" : "☆"}</button>
-        </div>
+        <div class="card-preview-row">${previewAction}</div>
         <div class="card-footer">
-          <div class="pill-row">${tags}</div>
           <div class="card-actions">
-            <button type="button" class="ghost-link" data-details="${escapeAttribute(bookmark.id)}">${escapeHtml(t("descriptionNotes"))}</button>
             <button type="button" class="edit-link" data-edit="${escapeAttribute(bookmark.id)}">${escapeHtml(t("edit"))}</button>
+            <button type="button" class="ghost-link" data-details="${escapeAttribute(bookmark.id)}">${escapeHtml(t("descriptionNotes"))}</button>
+            <button type="button" class="favorite-toggle${bookmark.favorite ? " is-active" : ""}" data-favorite="${escapeAttribute(bookmark.id)}" aria-label="${escapeAttribute(t(bookmark.favorite ? "removeFavorite" : "addFavorite"))}" title="${escapeAttribute(t(bookmark.favorite ? "removeFavorite" : "addFavorite"))}">${bookmark.favorite ? "★" : "☆"}</button>
           </div>
         </div>
       </article>`;
@@ -302,51 +294,20 @@ function renderBookmarks() {
   setupFaviconFallbacks(elements.bookmarkList.querySelectorAll<HTMLImageElement>(".favicon img"));
 }
 
-function renderEditorFolders(selectedFolderId?: string | null) {
-  const select = formControl<HTMLSelectElement>(elements.form, "folderId");
-  const currentValue = selectedFolderId ?? select.value;
-  select.innerHTML = [
-    `<option value="">${escapeHtml(t("uncategorized"))}</option>`,
-    ...state.folders.map(
-      (folder) => `<option value="${escapeAttribute(folder.id)}">${"&nbsp;".repeat(getDepth(folder) * 2)}${escapeHtml(folder.name)}</option>`
-    )
-  ].join("");
-  select.value = currentValue ?? "";
-}
-
 function renderEditorTags(selectedTagIds?: Set<string>) {
   const selected = selectedTagIds ?? selectedEditorTagIds();
   elements.editorTags.innerHTML = state.tags
     .map(
-      (tag) => `<option value="${escapeAttribute(tag.id)}"${selected.has(tag.id) ? " selected" : ""}>${escapeHtml(tag.name)}</option>`
+      (tag) => `<label class="editor-tag-option">
+        <input type="checkbox" name="tagIds" value="${escapeAttribute(tag.id)}"${selected.has(tag.id) ? " checked" : ""} />
+        <span>${escapeHtml(tag.name)}</span>
+      </label>`
     )
     .join("");
 }
 
 function selectedEditorTagIds() {
-  return new Set(Array.from(elements.editorTags.selectedOptions, (option) => option.value));
-}
-
-function folderUsageLabel(folder: Folder) {
-  return folder.bookmarkCount || folder.childCount
-    ? t("folderCounts", { bookmarkCount: folder.bookmarkCount, childCount: folder.childCount })
-    : t("emptyFolder");
-}
-
-function folderLabel(folder: Folder) {
-  return `${"　".repeat(getDepth(folder))}${folder.name}`;
-}
-
-function getDepth(folder: Folder) {
-  const visited = new Set<string>([folder.id]);
-  let depth = 0;
-  let parentId = folder.parentId;
-  while (parentId && !visited.has(parentId)) {
-    visited.add(parentId);
-    depth += 1;
-    parentId = state.folders.find((item) => item.id === parentId)?.parentId ?? null;
-  }
-  return depth;
+  return new Set(Array.from(elements.editorTags.querySelectorAll<HTMLInputElement>("input[type='checkbox']:checked"), (option) => option.value));
 }
 
 function openEditor(bookmark?: Bookmark) {
@@ -357,7 +318,6 @@ function openEditor(bookmark?: Bookmark) {
   formControl<HTMLInputElement>(elements.form, "title").value = bookmark?.title ?? "";
   formControl<HTMLInputElement>(elements.form, "url").value = bookmark?.url ?? "";
   formControl<HTMLInputElement>(elements.form, "faviconUrl").value = bookmark?.faviconUrl ?? "";
-  renderEditorFolders(bookmark?.folderId);
   formControl<HTMLInputElement>(elements.form, "description").value = bookmark?.description ?? "";
   formControl<HTMLTextAreaElement>(elements.form, "notes").value = bookmark?.notes ?? "";
   formControl<HTMLInputElement>(elements.form, "favorite").checked = Boolean(bookmark?.favorite);
@@ -377,12 +337,11 @@ function bookmarkPayload(): BookmarkInput {
     title: String(data.get("title") ?? ""),
     url: String(data.get("url") ?? ""),
     faviconUrl: String(data.get("faviconUrl") ?? ""),
-    folderId: String(data.get("folderId") || "") || null,
     description: String(data.get("description") ?? ""),
     notes: String(data.get("notes") ?? ""),
     favorite: data.get("favorite") === "on",
     structuredPreviewEnabled: data.get("structuredPreviewEnabled") === "on",
-    tagIds: Array.from(elements.editorTags.selectedOptions, (option) => option.value)
+    tagIds: Array.from(elements.editorTags.querySelectorAll<HTMLInputElement>("input[type='checkbox']:checked"), (option) => option.value)
   };
 }
 
@@ -436,29 +395,59 @@ function updateFaviconPreview(faviconUrl: string, title = "") {
 }
 
 async function openStructuredPreview(bookmark: Bookmark) {
-  await openStructuredPreviewUrl(bookmark.url, bookmark.title || safeHost(bookmark.url));
+  previewHistory = [];
+  previewHistoryIndex = -1;
+  await openStructuredPreviewUrl(bookmark.url, bookmark.title || safeHost(bookmark.url), { pushHistory: true });
 }
 
 function openBookmarkDetails(bookmark: Bookmark) {
   elements.bookmarkDetailsTitle.textContent = bookmark.title || t("bookmarkDetails");
+  elements.bookmarkDetailsId.textContent = bookmark.id;
   elements.bookmarkDetailsUrl.textContent = bookmark.url;
   elements.bookmarkDetailsUrl.href = bookmark.url;
+  elements.bookmarkDetailsDomain.textContent = safeHost(bookmark.url) || t("emptyValue");
+  elements.bookmarkDetailsTags.textContent = bookmark.tags.length ? bookmark.tags.map((tag) => tag.name).join(", ") : t("emptyValue");
+  elements.bookmarkDetailsFavorite.textContent = t(bookmark.favorite ? "yes" : "no");
+  elements.bookmarkDetailsStructuredPreview.textContent = t(bookmark.structuredPreviewEnabled ? "yes" : "no");
+  elements.bookmarkDetailsFavicon.textContent = bookmark.faviconUrl || t("emptyValue");
   elements.bookmarkDetailsDescription.textContent = bookmark.description || t("emptyDescription");
   elements.bookmarkDetailsNotes.textContent = bookmark.notes || t("emptyNotes");
+  elements.bookmarkDetailsCreatedAt.textContent = formatDateTime(bookmark.createdAt);
+  elements.bookmarkDetailsUpdatedAt.textContent = formatDateTime(bookmark.updatedAt);
+  elements.bookmarkDetailsAddDate.textContent = bookmark.addDate ? formatUnixSeconds(bookmark.addDate) : t("emptyValue");
   elements.bookmarkDetailsDialog.showModal();
 }
 
-async function openStructuredPreviewUrl(url: string, title: string) {
-  elements.previewTitle.textContent = title || safeHost(url);
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value || t("emptyValue") : date.toLocaleString();
+}
+
+function formatUnixSeconds(value: number) {
+  const date = new Date(value * 1000);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
+
+async function openStructuredPreviewUrl(url: string, title: string, options: { pushHistory?: boolean } = {}) {
+  if (options.pushHistory) pushPreviewHistory(url, title);
+  elements.previewTitle.textContent = url;
   elements.previewStatus.textContent = t("structuredLoading");
   elements.previewContent.replaceChildren();
-  if (!elements.structuredPreview.open) elements.structuredPreview.showModal();
+  elements.previewSearchInput.value = "";
+  previewSearchIndex = -1;
+  window.getSelection()?.removeAllRanges();
+  updatePreviewHistoryButtons();
+  if (!elements.structuredPreview.open) {
+    elements.structuredPreview.showModal();
+    requestAnimationFrame(() => elements.previewSearchInput.focus());
+  }
 
   try {
     const { preview } = await requestJson<{ preview: { url: string; contentType: string; text: string; truncated: boolean } }>(
       "/api/preview",
       { method: "POST", body: JSON.stringify({ url }) }
     );
+    elements.previewTitle.textContent = preview.url || url;
     const formatted = formatStructuredText(preview.text, preview.contentType, preview.url || url, {
       unknown: t("structuredUnknown"),
       invalidXml: t("xmlParseFailed")
@@ -469,6 +458,101 @@ async function openStructuredPreviewUrl(url: string, title: string) {
     elements.previewStatus.textContent = error instanceof Error ? error.message : t("structuredFailed");
     elements.previewContent.replaceChildren();
   }
+}
+
+function pushPreviewHistory(url: string, title: string) {
+  const current = previewHistory[previewHistoryIndex];
+  if (current?.url === url) {
+    current.title = title;
+    return;
+  }
+  previewHistory = previewHistory.slice(0, previewHistoryIndex + 1);
+  previewHistory.push({ url, title });
+  previewHistoryIndex = previewHistory.length - 1;
+}
+
+function updatePreviewHistoryButtons() {
+  elements.previewBack.disabled = previewHistoryIndex <= 0;
+  elements.previewForward.disabled = previewHistoryIndex >= previewHistory.length - 1;
+}
+
+function navigatePreviewHistory(offset: number) {
+  const nextIndex = previewHistoryIndex + offset;
+  const entry = previewHistory[nextIndex];
+  if (!entry) return;
+  previewHistoryIndex = nextIndex;
+  openStructuredPreviewUrl(entry.url, entry.title).catch(showError);
+}
+
+function previewTextNodes() {
+  const walker = document.createTreeWalker(elements.previewContent, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  let node = walker.nextNode();
+  while (node) {
+    nodes.push(node as Text);
+    node = walker.nextNode();
+  }
+  return nodes;
+}
+
+function previewMatchRanges(query: string) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  const nodes = previewTextNodes();
+  const fullText = nodes.map((node) => node.data).join("");
+  const ranges: { start: number; end: number }[] = [];
+  let start = fullText.toLowerCase().indexOf(needle);
+  while (start !== -1) {
+    ranges.push({ start, end: start + needle.length });
+    start = fullText.toLowerCase().indexOf(needle, start + needle.length);
+  }
+  return ranges;
+}
+
+function selectPreviewRange(start: number, end: number) {
+  const nodes = previewTextNodes();
+  let offset = 0;
+  let startNode: Text | null = null;
+  let endNode: Text | null = null;
+  let startOffset = 0;
+  let endOffset = 0;
+  for (const node of nodes) {
+    const nextOffset = offset + node.data.length;
+    if (!startNode && start >= offset && start <= nextOffset) {
+      startNode = node;
+      startOffset = start - offset;
+    }
+    if (!endNode && end >= offset && end <= nextOffset) {
+      endNode = node;
+      endOffset = end - offset;
+      break;
+    }
+    offset = nextOffset;
+  }
+  if (!startNode || !endNode) return false;
+  const range = document.createRange();
+  range.setStart(startNode, startOffset);
+  range.setEnd(endNode, endOffset);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  range.getBoundingClientRect();
+  elements.previewContent.scrollTo({ top: elements.previewContent.scrollTop + range.getBoundingClientRect().top - elements.previewContent.getBoundingClientRect().top - 80 });
+  return true;
+}
+
+function findPreviewText(direction: 1 | -1) {
+  if (previewSearchComposing) return;
+  const matches = previewMatchRanges(elements.previewSearchInput.value);
+  if (!matches.length) {
+    previewSearchIndex = -1;
+    window.getSelection()?.removeAllRanges();
+    if (elements.previewSearchInput.value.trim()) elements.previewStatus.textContent = t("searchNoMatch");
+    return;
+  }
+  previewSearchIndex = (previewSearchIndex + direction + matches.length) % matches.length;
+  const match = matches[previewSearchIndex];
+  selectPreviewRange(match.start, match.end);
 }
 
 function showToast(message: string) {
@@ -484,33 +568,34 @@ function showError(error: unknown) {
   showToast(message);
 }
 
-async function createInlineFolder() {
-  const input = elements.inlineFolderForm.querySelector<HTMLInputElement>("[name='name']");
-  const button = elements.inlineFolderForm.querySelector<HTMLButtonElement>("button");
+function resolveConfirm(confirmed: boolean) {
+  const resolver = pendingConfirm;
+  pendingConfirm = null;
+  if (elements.confirmDialog.open) elements.confirmDialog.close();
+  resolver?.(confirmed);
+}
+
+function confirmAction(message: string, acceptLabel = t("delete")) {
+  if (pendingConfirm) resolveConfirm(false);
+  elements.confirmDialogMessage.textContent = message;
+  elements.confirmDialogAccept.textContent = acceptLabel;
+  elements.confirmDialogAccept.removeAttribute("data-i18n");
+  elements.confirmDialog.showModal();
+  elements.confirmDialogCancel.focus();
+  return new Promise<boolean>((resolve) => {
+    pendingConfirm = resolve;
+  });
+}
+
+async function createInlineTag() {
+  const input = elements.inlineTagForm.querySelector<HTMLInputElement>("[name='name']");
+  const button = elements.inlineTagForm.querySelector<HTMLButtonElement>("button");
   if (!input || !button) return;
   const name = input.value.trim();
   if (!name) return;
   button.disabled = true;
   try {
-    const result = await requestJson<{ id: string }>("/api/folders", { method: "POST", body: JSON.stringify({ name }) });
-    input.value = "";
-    await refreshFolders(result.id);
-    showToast(t("folderAdded"));
-  } finally {
-    button.disabled = false;
-  }
-}
-
-async function createInlineTag() {
-  const input = elements.inlineTagForm.querySelector<HTMLInputElement>("[name='name']");
-  const colorInput = elements.inlineTagForm.querySelector<HTMLInputElement>("[name='primaryColor']");
-  const button = elements.inlineTagForm.querySelector<HTMLButtonElement>("button");
-  if (!input || !colorInput || !button) return;
-  const name = input.value.trim();
-  if (!name) return;
-  button.disabled = true;
-  try {
-    const result = await requestJson<{ id: string }>("/api/tags", { method: "POST", body: JSON.stringify({ name, primaryColor: colorInput.value }) });
+    const result = await requestJson<{ id: string }>("/api/tags", { method: "POST", body: JSON.stringify({ name }) });
     input.value = "";
     await refreshTags(result.id);
     showToast(t("tagAdded"));
@@ -519,71 +604,19 @@ async function createInlineTag() {
   }
 }
 
-async function refreshFolders(selectedFolderId?: string) {
-  const { folders } = await requestJson<{ folders: Folder[] }>("/api/folders");
-  state.folders = folders;
-  renderFolders();
-  renderEditorFolders(selectedFolderId);
-  renderManager();
-}
-
 async function refreshTags(selectedTagId?: string) {
   const { tags } = await requestJson<{ tags: Tag[] }>("/api/tags");
   const selected = selectedEditorTagIds();
   if (selectedTagId) selected.add(selectedTagId);
   state.tags = tags;
+  renderTagFilter();
   renderEditorTags(selected);
   renderManager();
 }
 
-async function deleteFolder(id: string) {
-  const folder = state.folders.find((item) => item.id === id);
-  if (!folder) return;
-  const hasRecords = folder.bookmarkCount > 0 || folder.childCount > 0;
-  const message = hasRecords
-    ? t("confirmDeleteFolder", { name: folder.name, bookmarkCount: folder.bookmarkCount, childCount: folder.childCount })
-    : t("confirmDeleteEmptyFolder", { name: folder.name });
-  if (!window.confirm(message)) return;
-
-  const selectedFolderIsRemoved = isFolderWithin(state.folderId, folder.id);
-  const result = await requestJson<{ bookmarkCount: number; childCount: number }>(`/api/folders/${folder.id}`, { method: "DELETE" });
-  if (selectedFolderIsRemoved) state.folderId = "";
-  await refresh();
-  showToast(
-    result.bookmarkCount || result.childCount
-      ? t("folderDeletedWithRecords", { bookmarkCount: result.bookmarkCount, childCount: result.childCount })
-      : t("folderDeleted")
-  );
-}
-
-async function updateManagedFolder(id: string) {
-  const row = elements.folderManageList.querySelector<HTMLElement>(`[data-folder-id="${CSS.escape(id)}"]`);
-  const nameInput = row?.querySelector<HTMLInputElement>("[name='name']");
-  if (!row || !nameInput) return;
-  const name = nameInput.value.trim();
-  if (!name) return;
-  await requestJson(`/api/folders/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({ name })
-  });
-  await refresh();
-  showToast(t("folderUpdated"));
-}
-
-function isFolderWithin(folderId: string, ancestorId: string) {
-  let currentId: string | null = folderId || null;
-  const visited = new Set<string>();
-  while (currentId && !visited.has(currentId)) {
-    if (currentId === ancestorId) return true;
-    visited.add(currentId);
-    currentId = state.folders.find((folder) => folder.id === currentId)?.parentId ?? null;
-  }
-  return false;
-}
-
 async function deleteTag(id: string) {
   const tag = state.tags.find((item) => item.id === id);
-  if (!tag || !window.confirm(t("confirmDeleteTag", { name: tag.name }))) return;
+  if (!tag || !(await confirmAction(t("confirmDeleteTag", { name: tag.name })))) return;
   await requestJson(`/api/tags/${tag.id}`, { method: "DELETE" });
   await refresh();
   showToast(t("tagDeleted"));
@@ -592,13 +625,12 @@ async function deleteTag(id: string) {
 async function updateManagedTag(id: string) {
   const row = elements.tagManageList.querySelector<HTMLElement>(`[data-tag-id="${CSS.escape(id)}"]`);
   const nameInput = row?.querySelector<HTMLInputElement>("[name='name']");
-  const colorInput = row?.querySelector<HTMLInputElement>("[name='primaryColor']");
-  if (!row || !nameInput || !colorInput) return;
+  if (!row || !nameInput) return;
   const name = nameInput.value.trim();
   if (!name) return;
   await requestJson(`/api/tags/${id}`, {
     method: "PATCH",
-    body: JSON.stringify({ name, primaryColor: colorInput.value })
+    body: JSON.stringify({ name })
   });
   await refresh();
   showToast(t("tagUpdated"));
@@ -618,8 +650,9 @@ async function importBookmarkHtml(input: HTMLInputElement) {
     return;
   }
 
-  const force = state.bookmarks.length > 0 || state.folders.length > 0 ? window.confirm(t("confirmReplaceBookmarks")) : true;
-  if (!force) {
+  const append = input.hasAttribute("data-initial-bookmark-import") || elements.appendImportCheckbox.checked;
+  const force = !append && (state.bookmarks.length > 0 || state.tags.length > 0);
+  if (force && !(await confirmAction(t("confirmReplaceBookmarks"), t("import")))) {
     input.value = "";
     return;
   }
@@ -631,7 +664,7 @@ async function importBookmarkHtml(input: HTMLInputElement) {
     const html = await readTextBlob(file);
     await requestJson("/api/import", {
       method: "POST",
-      body: JSON.stringify({ html, source: file.name, force })
+      body: JSON.stringify({ html, source: file.name, force, append })
     });
     window.location.reload();
   } catch (error) {
@@ -644,7 +677,7 @@ async function importBookmarkHtml(input: HTMLInputElement) {
 }
 
 async function resetData() {
-  if (!window.confirm(t("confirmResetData"))) return;
+  if (!(await confirmAction(t("confirmResetData"), t("resetDataButton")))) return;
   elements.resetDataButton.disabled = true;
   if (elements.systemSettings.open) elements.systemSettings.close();
   elements.importOverlay.hidden = false;
@@ -699,6 +732,9 @@ function handleBookmarkListClick(event: MouseEvent) {
 }
 
 elements.newButton.addEventListener("click", () => openEditor());
+document.querySelector<HTMLAnchorElement>(".skip-link")?.addEventListener("click", () => {
+  requestAnimationFrame(() => elements.workspace.focus({ preventScroll: true }));
+});
 elements.moveToTopButton.addEventListener("click", scrollWorkspaceToTop);
 elements.languageButton.addEventListener("click", () => cycleLocale().catch(showError));
 elements.themeButton.addEventListener("click", () => cycleColorMode().catch(showError));
@@ -717,6 +753,33 @@ elements.bookmarkList.addEventListener("change", (event) => {
 byId<HTMLButtonElement>("closeEditor").addEventListener("click", () => elements.editor.close());
 byId<HTMLButtonElement>("closePreview").addEventListener("click", () => elements.structuredPreview.close());
 byId<HTMLButtonElement>("closeBookmarkDetails").addEventListener("click", () => elements.bookmarkDetailsDialog.close());
+elements.previewBack.addEventListener("click", () => navigatePreviewHistory(-1));
+elements.previewForward.addEventListener("click", () => navigatePreviewHistory(1));
+elements.previewSearchInput.addEventListener("input", (event) => {
+  previewSearchIndex = -1;
+  if (previewSearchComposing || (event as InputEvent).isComposing) return;
+  window.getSelection()?.removeAllRanges();
+});
+elements.previewSearchInput.addEventListener("compositionstart", () => {
+  window.clearTimeout(previewSearchCompositionTimer);
+  previewSearchComposing = true;
+});
+elements.previewSearchInput.addEventListener("compositionend", () => {
+  window.clearTimeout(previewSearchCompositionTimer);
+  previewSearchCompositionTimer = window.setTimeout(() => {
+    previewSearchComposing = false;
+    previewSearchIndex = -1;
+    window.getSelection()?.removeAllRanges();
+  }, 0);
+});
+elements.previewSearchInput.addEventListener("keydown", (event) => {
+  if (event.isComposing || previewSearchComposing || event.key === "Process") return;
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  findPreviewText(event.shiftKey ? -1 : 1);
+});
+elements.previewSearchPrevious.addEventListener("click", () => findPreviewText(-1));
+elements.previewSearchNext.addEventListener("click", () => findPreviewText(1));
 elements.previewContent.addEventListener("click", (event) => {
   const anchor = (event.target as Element).closest<HTMLAnchorElement>("[data-preview-url]");
   if (!anchor) return;
@@ -732,9 +795,14 @@ elements.openPreviewLinkExternal.addEventListener("click", () => {
 elements.openPreviewLinkInline.addEventListener("click", () => {
   const url = pendingPreviewUrl;
   elements.previewLinkDialog.close();
-  if (url) openStructuredPreviewUrl(url, safeHost(url)).catch(showError);
+  if (url) openStructuredPreviewUrl(url, safeHost(url), { pushHistory: true }).catch(showError);
 });
 elements.cancelPreviewLink.addEventListener("click", () => elements.previewLinkDialog.close());
+elements.confirmDialogAccept.addEventListener("click", () => resolveConfirm(true));
+elements.confirmDialogCancel.addEventListener("click", () => resolveConfirm(false));
+elements.confirmDialog.addEventListener("close", () => {
+  if (pendingConfirm) resolveConfirm(false);
+});
 elements.fetchMetadataButton.addEventListener("click", () => fillMetadata(true).catch(showError));
 formControl<HTMLInputElement>(elements.form, "url").addEventListener("input", (event) => {
   window.clearTimeout(metadataTimer);
@@ -759,11 +827,6 @@ elements.manageDataButton.addEventListener("click", () => {
   elements.manager.showModal();
 });
 byId<HTMLButtonElement>("closeManager").addEventListener("click", () => elements.manager.close());
-byId<HTMLButtonElement>("openFolderManager").addEventListener("click", () => {
-  elements.manager.close();
-  elements.folderManager.showModal();
-});
-byId<HTMLButtonElement>("closeFolderManager").addEventListener("click", () => elements.folderManager.close());
 byId<HTMLButtonElement>("openTagManager").addEventListener("click", () => {
   elements.manager.close();
   elements.tagManager.showModal();
@@ -781,8 +844,8 @@ byId<HTMLButtonElement>("openSystemSettings").addEventListener("click", () => {
 byId<HTMLButtonElement>("closeSystemSettings").addEventListener("click", () => elements.systemSettings.close());
 elements.bookmarkHtmlInput.addEventListener("change", () => importBookmarkHtml(elements.bookmarkHtmlInput).catch(showError));
 elements.resetDataButton.addEventListener("click", () => resetData().catch(showError));
-elements.folderSelect.addEventListener("change", () => {
-  state.folderId = elements.folderSelect.value;
+elements.tagSelect.addEventListener("change", () => {
+  state.tagId = elements.tagSelect.value;
   refresh().catch(showError);
 });
 elements.searchInput.addEventListener("input", () => {
@@ -796,15 +859,6 @@ elements.favoriteOnlyButton.addEventListener("click", () => {
   renderFavoriteFilter();
   refresh().catch(showError);
 });
-elements.folderManageList.addEventListener("click", (event) => {
-  const saveButton = (event.target as Element).closest<HTMLButtonElement>("[data-save-folder]");
-  if (saveButton) {
-    updateManagedFolder(saveButton.dataset.saveFolder ?? "").catch(showError);
-    return;
-  }
-  const deleteButton = (event.target as Element).closest<HTMLButtonElement>("[data-delete-folder]");
-  if (deleteButton) deleteFolder(deleteButton.dataset.deleteFolder ?? "").catch(showError);
-});
 elements.tagManageList.addEventListener("click", (event) => {
   const saveButton = (event.target as Element).closest<HTMLButtonElement>("[data-save-tag]");
   if (saveButton) {
@@ -814,26 +868,12 @@ elements.tagManageList.addEventListener("click", (event) => {
   const deleteButton = (event.target as Element).closest<HTMLButtonElement>("[data-delete-tag]");
   if (deleteButton) deleteTag(deleteButton.dataset.deleteTag ?? "").catch(showError);
 });
-byId<HTMLFormElement>("folderForm").addEventListener("submit", (event) => {
-  event.preventDefault();
-  const form = event.currentTarget as HTMLFormElement;
-  setFormBusy(form, true);
-  requestJson("/api/folders", { method: "POST", body: JSON.stringify({ name: new FormData(form).get("name") }) })
-    .then(async () => {
-      form.reset();
-      await refresh();
-      showToast(t("folderAdded"));
-    })
-    .catch(showError)
-    .finally(() => setFormBusy(form, false));
-});
-elements.inlineFolderForm.querySelector("button")?.addEventListener("click", () => createInlineFolder().catch(showError));
 byId<HTMLFormElement>("tagForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = event.currentTarget as HTMLFormElement;
   setFormBusy(form, true);
   const data = new FormData(form);
-  requestJson("/api/tags", { method: "POST", body: JSON.stringify({ name: data.get("name"), primaryColor: data.get("primaryColor") }) })
+  requestJson("/api/tags", { method: "POST", body: JSON.stringify({ name: data.get("name") }) })
     .then(async () => {
       form.reset();
       await refresh();
@@ -863,9 +903,9 @@ elements.form.addEventListener("submit", (event) => {
   setFormBusy(elements.form, true);
   run().catch(showError).finally(() => setFormBusy(elements.form, false));
 });
-elements.deleteButton.addEventListener("click", () => {
+elements.deleteButton.addEventListener("click", async () => {
   const id = formControl<HTMLInputElement>(elements.form, "id").value;
-  if (!id || !window.confirm(t("confirmDeleteBookmark"))) return;
+  if (!id || !(await confirmAction(t("confirmDeleteBookmark")))) return;
   setFormBusy(elements.form, true);
   requestJson(`/api/bookmarks/${id}`, { method: "DELETE" })
     .then(async () => {

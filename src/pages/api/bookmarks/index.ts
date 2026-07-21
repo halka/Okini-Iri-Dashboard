@@ -35,7 +35,7 @@ export const GET: APIRoute = apiRoute(async ({ locals, url }) => {
   }
   const bookmarks = await listBookmarks(getDb(locals), {
     query: queryText(url.searchParams.get("q"), "q"),
-    folderId: queryIdentifier(url.searchParams.get("folderId"), "folderId"),
+    tagId: queryIdentifier(url.searchParams.get("tagId"), "tagId"),
     favorite: favoriteValue === "true"
   });
   return json({ bookmarks });

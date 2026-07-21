@@ -1,8 +1,16 @@
 import type { Tag } from "../../domain/bookmarks";
 import { mapTag, type D1Row } from "./mappers";
 
+const reservedTagNames = new Set(["untagged"]);
+
+export function isReservedTagName(name: string) {
+  return reservedTagNames.has(name.trim().toLowerCase());
+}
+
 export async function listTags(db: D1Database): Promise<Tag[]> {
-  const result = await db.prepare("SELECT id, name, primary_color FROM tags ORDER BY name COLLATE NOCASE").all<D1Row>();
+  const result = await db
+    .prepare("SELECT id, name, primary_color FROM tags WHERE lower(name) NOT IN ('untagged') ORDER BY name COLLATE NOCASE")
+    .all<D1Row>();
   return result.results.map(mapTag);
 }
 

@@ -23,7 +23,7 @@ export class ThemeController {
     const label = mode === "system" ? this.t("colorModeAuto") : mode === "light" ? this.t("colorModeLight") : this.t("colorModeDark");
     this.button.textContent = label;
     this.button.setAttribute("aria-label", this.t("colorModeLabel", { mode: label }));
-    this.updateThemeColor();
+    this.updateBrowserChrome(mode, resolved);
   }
 
   next(): ColorMode {
@@ -31,8 +31,15 @@ export class ThemeController {
     return colorModes[(currentIndex + 1) % colorModes.length];
   }
 
-  updateThemeColor() {
-    const color = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
-    document.querySelector<HTMLMetaElement>("meta[name='theme-color']")?.setAttribute("content", color);
+  updateBrowserChrome(mode: ColorMode, resolved: Exclude<ColorMode, "system">) {
+    const lightTheme = document.querySelector<HTMLMetaElement>("meta[data-theme-color='light']");
+    const darkTheme = document.querySelector<HTMLMetaElement>("meta[data-theme-color='dark']");
+    const colorSchemeMeta = document.querySelector<HTMLMetaElement>("meta[name='color-scheme']");
+    if (lightTheme && darkTheme) {
+      lightTheme.media = mode === "system" ? "(prefers-color-scheme: light)" : resolved === "light" ? "all" : "not all";
+      darkTheme.media = mode === "system" ? "(prefers-color-scheme: dark)" : resolved === "dark" ? "all" : "not all";
+      document.documentElement.style.backgroundColor = (resolved === "dark" ? darkTheme : lightTheme).content;
+    }
+    if (colorSchemeMeta) colorSchemeMeta.content = mode === "system" ? "light dark" : resolved;
   }
 }

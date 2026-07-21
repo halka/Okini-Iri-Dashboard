@@ -10,16 +10,30 @@ interface Props {
 const { t } = Astro.props;
 ---
 
-<dialog id="structuredPreview" aria-labelledby="previewTitle" aria-describedby="previewStatus">
+<dialog id="structuredPreview" aria-labelledby="previewTitle">
   <section class="preview-panel">
     <header>
       <div>
         <h3 id="previewTitle" data-i18n="structuredPreview">{t.structuredPreview}</h3>
-        <p id="previewStatus" role="status" aria-live="polite" data-i18n="previewIdle">{t.previewIdle}</p>
+        <p id="previewStatus" role="status" data-i18n="previewIdle">{t.previewIdle}</p>
       </div>
       <button type="button" id="closePreview" aria-label={t.close} data-i18n-aria-label="close">×</button>
     </header>
-    <pre id="previewContent"></pre>
+    <div class="preview-tools">
+      <div class="preview-nav-actions">
+        <button type="button" id="previewBack" aria-label={t.back} title={t.back} data-i18n-aria-label="back" data-i18n-title="back">←</button>
+        <button type="button" id="previewForward" aria-label={t.forward} title={t.forward} data-i18n-aria-label="forward" data-i18n-title="forward">→</button>
+      </div>
+      <label class="preview-search">
+        <span class="visually-hidden" data-i18n="search">{t.search}</span>
+        <input id="previewSearchInput" type="search" placeholder={t.search} autocomplete="off" enterkeyhint="search" data-i18n-placeholder="search" />
+      </label>
+      <div class="preview-search-actions">
+        <button type="button" id="previewSearchPrevious" aria-label={t.previousMatch} title={t.previousMatch} data-i18n-aria-label="previousMatch" data-i18n-title="previousMatch">↑</button>
+        <button type="button" id="previewSearchNext" aria-label={t.nextMatch} title={t.nextMatch} data-i18n-aria-label="nextMatch" data-i18n-title="nextMatch">↓</button>
+      </div>
+    </div>
+    <pre id="previewContent" tabindex="0" aria-label={t.structuredPreview} data-i18n-aria-label="structuredPreview"></pre>
   </section>
 </dialog>
 
@@ -31,6 +45,10 @@ const { t } = Astro.props;
     </header>
     <dl>
       <div>
+        <dt>ID</dt>
+        <dd id="bookmarkDetailsId"></dd>
+      </div>
+      <div>
         <dt data-i18n="url">{t.url}</dt>
         <dd><a id="bookmarkDetailsUrl" href="#" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"></a></dd>
       </div>
@@ -41,6 +59,38 @@ const { t } = Astro.props;
       <div>
         <dt data-i18n="notes">{t.notes}</dt>
         <dd id="bookmarkDetailsNotes"></dd>
+      </div>
+      <div>
+        <dt data-i18n="domain">{t.domain}</dt>
+        <dd id="bookmarkDetailsDomain"></dd>
+      </div>
+      <div>
+        <dt data-i18n="tags">{t.tags}</dt>
+        <dd id="bookmarkDetailsTags"></dd>
+      </div>
+      <div>
+        <dt data-i18n="favorite">{t.favorite}</dt>
+        <dd id="bookmarkDetailsFavorite"></dd>
+      </div>
+      <div>
+        <dt data-i18n="enableStructuredPreview">{t.enableStructuredPreview}</dt>
+        <dd id="bookmarkDetailsStructuredPreview"></dd>
+      </div>
+      <div>
+        <dt data-i18n="favicon">{t.favicon}</dt>
+        <dd id="bookmarkDetailsFavicon"></dd>
+      </div>
+      <div>
+        <dt data-i18n="createdAt">{t.createdAt}</dt>
+        <dd id="bookmarkDetailsCreatedAt"></dd>
+      </div>
+      <div>
+        <dt data-i18n="updatedAt">{t.updatedAt}</dt>
+        <dd id="bookmarkDetailsUpdatedAt"></dd>
+      </div>
+      <div>
+        <dt data-i18n="addDate">{t.addDate}</dt>
+        <dd id="bookmarkDetailsAddDate"></dd>
       </div>
     </dl>
   </section>
@@ -54,6 +104,17 @@ const { t } = Astro.props;
       <button id="openPreviewLinkExternal" type="button" class="primary" data-i18n="openInNewTab">{t.openInNewTab}</button>
       <button id="openPreviewLinkInline" type="button" data-i18n="openInPreview">{t.openInPreview}</button>
       <button id="cancelPreviewLink" type="button" data-i18n="cancel">{t.cancel}</button>
+    </div>
+  </section>
+</dialog>
+
+<dialog id="confirmDialog" role="alertdialog" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
+  <section class="link-choice-panel confirm-panel">
+    <h3 id="confirmDialogTitle" data-i18n="confirmation">{t.confirmation}</h3>
+    <p id="confirmDialogMessage"></p>
+    <div class="link-choice-actions confirm-actions">
+      <button id="confirmDialogCancel" type="button" data-i18n="cancel">{t.cancel}</button>
+      <button id="confirmDialogAccept" type="button" class="danger" data-i18n="delete">{t.delete}</button>
     </div>
   </section>
 </dialog>

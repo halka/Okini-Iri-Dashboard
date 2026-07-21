@@ -1,6 +1,5 @@
 ---
 import type { defaultLocale, messages } from "../i18n/messages";
-import { UNCATEGORIZED_FOLDER_FILTER_ID } from "../domain/bookmarks";
 
 type Copy = (typeof messages)[typeof defaultLocale];
 
@@ -14,20 +13,21 @@ const { t } = Astro.props;
 <main class="shell">
   <a class="skip-link" href="#workspace" data-i18n="skipToContent">{t.skipToContent}</a>
   <header class="topbar">
-    <h1 class="app-title">
-      <button id="homeFilterButton" type="button" aria-label={t.appTitle} data-i18n-aria-label="appTitle">
+    <h1 class="app-title" aria-label={t.appTitle} data-i18n-aria-label="appTitle">
+      <button id="homeFilterButton" type="button" aria-label={t.homeAction} title={t.moveToTop} data-i18n-aria-label="homeAction" data-i18n-title="moveToTop">
         <img src="/favicon.svg" alt="" width="32" height="32" aria-hidden="true" />
         <span data-i18n="appTitle">{t.appTitle}</span>
       </button>
     </h1>
     <div class="header-filters">
-      <label class="search" aria-label={t.search}>
+      <label class="search">
+        <span class="visually-hidden" data-i18n="search">{t.search}</span>
         <input id="searchInput" type="search" placeholder={t.searchPlaceholder} autocomplete="off" enterkeyhint="search" data-i18n-placeholder="searchPlaceholder" />
       </label>
-      <label class="select-filter" aria-label={t.folder}>
-        <select id="folderSelect">
+      <label class="select-filter">
+        <span class="visually-hidden" data-i18n="tags">{t.tags}</span>
+        <select id="tagSelect">
           <option value="" data-i18n="all">{t.all}</option>
-          <option value={UNCATEGORIZED_FOLDER_FILTER_ID} data-i18n="uncategorized">{t.uncategorized}</option>
         </select>
       </label>
       <button id="favoriteOnly" type="button" class="filter-toggle" aria-pressed="false" aria-controls="bookmarkList" data-i18n="favoriteOnly">{t.favoriteOnly}</button>
@@ -66,12 +66,12 @@ const { t } = Astro.props;
     </div>
   </header>
 
-  <section id="workspace" class="workspace" tabindex="-1">
+  <div id="workspace" class="workspace" tabindex="-1">
     <section class="content-grid" aria-labelledby="bookmarkListTitle">
       <h2 id="bookmarkListTitle" class="visually-hidden" data-i18n="bookmarks">{t.bookmarks}</h2>
       <div id="bookmarkList" class="bookmark-list" aria-busy="true"></div>
-      <p id="workspaceStatus" class="visually-hidden" role="status" aria-live="polite">{t.loading}</p>
+      <p id="workspaceStatus" class="visually-hidden" role="status">{t.loading}</p>
     </section>
-  </section>
+  </div>
   <button id="moveToTopButton" type="button" class="move-top-button" aria-label={t.moveToTop} title={t.moveToTop} data-i18n-aria-label="moveToTop" data-i18n-title="moveToTop" hidden>{t.moveToTop}</button>
 </main>

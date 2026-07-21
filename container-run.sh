@@ -15,10 +15,18 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/.env" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$SCRIPT_DIR/.env"
+  set +a
+fi
+
 IMAGE_NAME="okini-iri-dashboard"
 CONTAINER_NAME="okini-iri-dashboard"
 VOLUME_NAME="okini-iri-wrangler"
-HOST_PORT="8787"
+HOST_PORT="${PORT:-8787}"
 CONTAINER_PORT="8787"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
