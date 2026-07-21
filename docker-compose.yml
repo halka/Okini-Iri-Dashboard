@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: okini-iri-dashboard
+    container_name: "${CONTAINER_NAME:-Okini}"
     ports:
       # Set PORT in .env to change the host port. The container keeps Wrangler's default.
       - "${PORT:-8787}:8787"
