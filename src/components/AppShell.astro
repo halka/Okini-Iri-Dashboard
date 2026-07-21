@@ -69,6 +69,18 @@ const { t } = Astro.props;
   <div id="workspace" class="workspace" tabindex="-1">
     <section class="content-grid" aria-labelledby="bookmarkListTitle">
       <h2 id="bookmarkListTitle" class="visually-hidden" data-i18n="bookmarks">{t.bookmarks}</h2>
+      <div id="bulkActions" class="bulk-actions" hidden>
+        <span><output id="bulkSelectionCount">0</output> <span data-i18n="selectedBookmarks">{t.selectedBookmarks}</span></span>
+        <label class="bulk-tag-select">
+          <span class="visually-hidden" data-i18n="bulkTag">{t.bulkTag}</span>
+          <select id="bulkTagSelect" aria-label={t.bulkTag} data-i18n-aria-label="bulkTag">
+            <option value="" data-i18n="chooseTag">{t.chooseTag}</option>
+          </select>
+        </label>
+        <button id="bulkAddTag" type="button" class="bulk-action" data-i18n="bulkAddTag">{t.bulkAddTag}</button>
+        <button id="bulkRemoveTag" type="button" class="bulk-action" data-i18n="bulkRemoveTag">{t.bulkRemoveTag}</button>
+        <button id="bulkClear" type="button" class="ghost-link" data-i18n="clearSelection">{t.clearSelection}</button>
+      </div>
       <div id="bookmarkList" class="bookmark-list" aria-busy="true"></div>
       <p id="workspaceStatus" class="visually-hidden" role="status">{t.loading}</p>
     </section>

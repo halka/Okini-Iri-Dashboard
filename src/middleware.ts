@@ -8,6 +8,7 @@ import { json } from "./lib/http";
 import { getKv } from "./lib/kv";
 
 const publicRoutes = new Set(["/auth/login", "/auth/callback", "/auth/error", "/auth/signed-out"]);
+const tokenAuthenticatedApiRoutes = new Set(["/api/extension/bookmarks"]);
 const publicAssets = new Set(["/favicon.svg", "/theme-boot.js"]);
 
 function isPublicPath(pathname: string) {
@@ -48,6 +49,7 @@ function secure(response: Response, pathname: string, request: Request) {
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = context.url;
+  if (tokenAuthenticatedApiRoutes.has(pathname)) return secure(await next(), pathname, context.request);
   if (isPublicPath(pathname)) return secure(await next(), pathname, context.request);
 
   if (isUnsafeCrossOriginRequest(context.request, context.url.origin)) {

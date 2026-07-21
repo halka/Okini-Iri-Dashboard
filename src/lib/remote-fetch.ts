@@ -1,6 +1,5 @@
 const redirectStatuses = new Set([301, 302, 303, 307, 308]);
-const maxRedirects = 3;
-const blockedHostSuffixes = [".localhost", ".local", ".internal", ".home.arpa", ".nip.io", ".sslip.io", ".xip.io"];
+const maxRedirects = 5;
 
 export class UnsafeRemoteUrlError extends Error {}
 

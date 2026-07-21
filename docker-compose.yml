@@ -25,6 +25,9 @@ services:
       # OIDC_ALLOWED_EMAILS: "you@example.com"
       # AUTH_SESSION_TTL_SECONDS: "28800"
 
+      # ── Optional browser extension access ──────────────────────────────────
+      # EXTENSION_API_TOKEN: "${EXTENSION_API_TOKEN}"
+
       # CUSTOM_CA_CERT: "/certs/custom-ca.crt"
 
       # NODE_ENV is informational; wrangler local mode ignores it.

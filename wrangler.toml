@@ -22,3 +22,5 @@ id = "REPLACE_WITH_CLOUDFLARE_SESSION_KV_NAMESPACE_ID"
 
 # OIDC non-secret variables belong in [vars]. Store OIDC_CLIENT_SECRET with
 # `npx wrangler secret put OIDC_CLIENT_SECRET`. See README.md for all options.
+# Store the browser extension token with
+# `npx wrangler secret put EXTENSION_API_TOKEN`.

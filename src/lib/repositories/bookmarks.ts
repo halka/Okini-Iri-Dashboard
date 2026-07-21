@@ -3,7 +3,7 @@ import { mapBookmark, type D1Row } from "./mappers";
 
 const bookmarkSelect = `
   SELECT b.id, b.title, b.url, b.folder_id, f.name AS folder_name, b.description, b.notes,
-    b.favicon_url, b.favorite, b.vpn_required, b.structured_preview_enabled, b.sort_order, b.add_date, b.created_at, b.updated_at,
+    b.favicon_url, b.favorite, b.structured_preview_enabled, b.sort_order, b.add_date, b.created_at, b.updated_at,
     COALESCE(
       json_group_array(
         CASE WHEN t.id IS NULL THEN NULL ELSE json_object('id', t.id, 'name', t.name, 'primaryColor', t.primary_color) END
@@ -31,7 +31,9 @@ export async function listBookmarks(db: D1Database, filters: BookmarkFilters = {
     )`);
     const like = `%${filters.query}%`;
     binds.push(like, like, like, like, like);
-  } else if (filters.tagId && !filters.favorite) {
+  }
+
+  if (filters.tagId) {
     where.push(`EXISTS (
       SELECT 1
       FROM bookmark_tags filter_bt
@@ -78,8 +80,8 @@ export async function createBookmark(db: D1Database, input: BookmarkInput) {
   await db
     .prepare(
       `INSERT INTO bookmarks
-        (id, title, url, favicon_url, folder_id, description, notes, favorite, vpn_required, structured_preview_enabled, sort_order, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COUNT(*) FROM bookmarks WHERE folder_id IS ?), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+        (id, title, url, favicon_url, folder_id, description, notes, favorite, structured_preview_enabled, sort_order, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COUNT(*) FROM bookmarks WHERE folder_id IS ?), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
     )
     .bind(
       id,
@@ -90,7 +92,6 @@ export async function createBookmark(db: D1Database, input: BookmarkInput) {
       input.description?.trim() ?? "",
       input.notes?.trim() ?? "",
       Number(Boolean(input.favorite)),
-      Number(Boolean(input.vpnRequired)),
       Number(Boolean(input.structuredPreviewEnabled)),
       input.folderId ?? null
     )
@@ -112,7 +113,6 @@ export async function updateBookmark(db: D1Database, id: string, input: Bookmark
   if (input.description !== undefined) addUpdate(sets, binds, "description", input.description.trim());
   if (input.notes !== undefined) addUpdate(sets, binds, "notes", input.notes.trim());
   if (typeof input.favorite === "boolean") addUpdate(sets, binds, "favorite", Number(input.favorite));
-  if (typeof input.vpnRequired === "boolean") addUpdate(sets, binds, "vpn_required", Number(input.vpnRequired));
   if (typeof input.structuredPreviewEnabled === "boolean") {
     addUpdate(sets, binds, "structured_preview_enabled", Number(input.structuredPreviewEnabled));
   }
@@ -126,6 +126,59 @@ export async function updateBookmark(db: D1Database, id: string, input: Bookmark
 export async function deleteBookmark(db: D1Database, id: string) {
   const result = await db.prepare("DELETE FROM bookmarks WHERE id = ?").bind(id).run();
   return result.meta.changes > 0;
+}
+
+export async function reorderBookmarks(db: D1Database, ids: string[]) {
+  const statements = ids.map((id, sortOrder) =>
+    db
+      .prepare("UPDATE bookmarks SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(sortOrder, id)
+  );
+  if (statements.length) await db.batch(statements);
+  return ids.length;
+}
+
+export async function bulkUpdateBookmarkTags(
+  db: D1Database,
+  bookmarkIds: string[],
+  addTagIds: string[] = [],
+  removeTagIds: string[] = []
+) {
+  const bookmarkPlaceholders = bookmarkIds.map(() => "?").join(", ");
+  const tagIds = [...new Set([...addTagIds, ...removeTagIds])];
+  const tagPlaceholders = tagIds.map(() => "?").join(", ");
+  const validBookmarkRows = await db
+    .prepare(`SELECT id FROM bookmarks WHERE id IN (${bookmarkPlaceholders})`)
+    .bind(...bookmarkIds)
+    .all<{ id: string }>();
+  const validBookmarkIds = validBookmarkRows.results.map((row) => row.id);
+  if (!validBookmarkIds.length || !tagIds.length) return { bookmarks: validBookmarkIds.length, tags: 0 };
+
+  const validTagRows = await db
+    .prepare(`SELECT id FROM tags WHERE id IN (${tagPlaceholders}) AND lower(name) NOT IN ('untagged')`)
+    .bind(...tagIds)
+    .all<{ id: string }>();
+  const validTagIds = new Set(validTagRows.results.map((row) => row.id));
+  const statements: D1PreparedStatement[] = [];
+  const validAddTagIds = addTagIds.filter((id) => validTagIds.has(id));
+  const validRemoveTagIds = removeTagIds.filter((id) => validTagIds.has(id));
+
+  for (const bookmarkId of validBookmarkIds) {
+    for (const tagId of validAddTagIds) {
+      statements.push(
+        db.prepare("INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)").bind(bookmarkId, tagId)
+      );
+    }
+    if (validRemoveTagIds.length) {
+      statements.push(
+        db
+          .prepare(`DELETE FROM bookmark_tags WHERE bookmark_id = ? AND tag_id IN (${validRemoveTagIds.map(() => "?").join(", ")})`)
+          .bind(bookmarkId, ...validRemoveTagIds)
+      );
+    }
+  }
+  if (statements.length) await db.batch(statements);
+  return { bookmarks: validBookmarkIds.length, tags: validTagIds.size };
 }
 
 function addUpdate(sets: string[], binds: unknown[], column: string, value: unknown) {

@@ -1,12 +1,17 @@
 import type { APIRoute } from "astro";
 import { ApiError, apiRoute, isHttpUrl, json, readJson, requiredText } from "../../lib/http";
 import { fetchUrlMetadata } from "../../lib/metadata";
+import { consumeRateLimit } from "../../lib/rate-limit";
 
 type Payload = {
   url?: string;
 };
 
 export const POST: APIRoute = apiRoute(async ({ request }) => {
+  const limit = consumeRateLimit(request, "metadata", 30, 60_000);
+  if (!limit.allowed) {
+    throw new ApiError("Too many metadata requests", 429, "rate_limited", { "retry-after": String(limit.retryAfter) });
+  }
   const body = await readJson<Payload>(request);
   const value = requiredText(body.url, "url", 65_536);
   const url = /^https?:\/\//i.test(value) ? value : `https://${value}`;

@@ -19,7 +19,6 @@
   --control-height: 44px;
   --radius: 8px;
   --page-max: 1520px;
-  --vpn-required: rgb(255, 140, 0);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -353,6 +352,54 @@ textarea:disabled {
   align-items: start;
 }
 
+.bulk-actions {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 220px) auto auto auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 10px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bulk-actions output {
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.bulk-tag-select,
+.bulk-tag-select select {
+  min-width: 0;
+  width: 100%;
+}
+
+.bulk-tag-select select {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--field);
+  color: var(--ink);
+  padding: 0 8px;
+}
+
+.bulk-action {
+  min-height: 36px;
+  border-radius: var(--radius);
+  background: var(--soft);
+  color: var(--ink);
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bulk-action:hover {
+  background: var(--soft-hover);
+}
+
 .bookmark-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
@@ -364,6 +411,7 @@ textarea:disabled {
 }
 
 .bookmark-card {
+  position: relative;
   display: grid;
   grid-template-rows: auto 34px minmax(28px, 1fr) auto;
   gap: 10px;
@@ -373,6 +421,37 @@ textarea:disabled {
   border-radius: var(--radius);
   background: var(--panel);
   padding: 14px;
+}
+
+.bookmark-card[draggable="true"] {
+  cursor: grab;
+  touch-action: manipulation;
+}
+
+.bookmark-card.is-dragging {
+  opacity: 0.48;
+}
+
+.bookmark-card.is-selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary), transparent 72%);
+}
+
+.bookmark-select {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: 22px !important;
+  min-width: 22px !important;
+  height: 22px;
+  min-height: 22px !important;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.bookmark-card .card-main {
+  padding-right: 28px;
 }
 
 .bookmark-card:hover {
@@ -470,8 +549,7 @@ textarea:disabled {
   overflow: hidden;
 }
 
-.card-tag,
-.card-vpn-badge {
+.card-tag {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
@@ -487,11 +565,6 @@ textarea:disabled {
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.card-vpn-badge {
-  color: var(--int);
-  background: var(--vpn-required);
 }
 
 .card-actions {
@@ -644,6 +717,10 @@ dialog {
 
 #tagManager {
   width: min(680px, calc(100vw - 24px));
+}
+
+#auditLogDialog {
+  width: min(760px, calc(100vw - 24px));
 }
 
 #importManager {
@@ -964,6 +1041,62 @@ input[type="checkbox"]:focus-visible {
   background: var(--soft-hover);
 }
 
+.audit-log-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.audit-log-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(62vh, 640px);
+  overflow-y: auto;
+}
+
+.audit-log-entry {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--field);
+  padding: 12px;
+}
+
+.audit-log-entry header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.audit-log-entry p,
+.audit-log-entry small {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.audit-log-entry time,
+.audit-log-entry small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.audit-log-entry details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.audit-log-entry pre {
+  max-height: 180px;
+  margin: 8px 0 0;
+  overflow: auto;
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
 .manager-section,
 .settings-block {
   display: grid;
@@ -1049,6 +1182,35 @@ input[type="checkbox"]:focus-visible {
 
 .file-button {
   cursor: pointer;
+}
+
+.import-drop-zone {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 132px;
+  border: 2px dashed var(--line);
+  background: var(--panel);
+  padding: 18px;
+  white-space: normal;
+}
+
+.import-drop-zone strong,
+.import-drop-zone span,
+.import-drop-zone small {
+  display: block;
+}
+
+.import-drop-zone span,
+.import-drop-zone small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.import-drop-zone.is-dragover {
+  border-color: var(--primary);
+  background: var(--soft-hover);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary), transparent 72%);
 }
 
 .file-button:focus-within,
@@ -1528,6 +1690,7 @@ html[data-color-mode="dark"] .hljs-built_in {
   .header-filters {
     grid-column: 1 / -1;
     grid-row: 2;
+    grid-template-columns: minmax(0, 1fr) minmax(108px, 124px);
   }
 
   .bookmark-list {
@@ -1698,6 +1861,25 @@ html[data-color-mode="dark"] .hljs-built_in {
   .preview-nav-actions button,
   .preview-search-actions button {
     width: 100%;
+  }
+
+  .bulk-actions {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .bulk-actions > span,
+  .bulk-tag-select {
+    grid-column: 1 / -1;
+  }
+
+  .bulk-actions .ghost-link {
+    width: 100%;
+  }
+
+  .audit-log-entry header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
   }
 
   .preview-panel pre {

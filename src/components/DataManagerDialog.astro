@@ -40,7 +40,21 @@ const identity = authenticationDisabled ? t.authenticationDisabled : user.email 
       <button type="button" id="openTagManager" class="menu-action" data-i18n="tagManagement">{t.tagManagement}</button>
       <button type="button" id="openImportManager" class="menu-action" data-i18n="import">{t.import}</button>
       <a id="exportBookmarks" class="menu-action" href="/api/export" download="okini-iri-bookmarks.html" data-i18n="exportBookmarks">{t.exportBookmarks}</a>
+      <button type="button" id="openAuditLog" class="menu-action" data-i18n="auditLog">{t.auditLog}</button>
       <button type="button" id="openSystemSettings" class="menu-action" data-i18n="systemSettings">{t.systemSettings}</button>
+    </div>
+  </section>
+</dialog>
+
+<dialog id="auditLogDialog" aria-labelledby="auditLogTitle">
+  <section class="manager-panel">
+    <header>
+      <h3 id="auditLogTitle" data-i18n="auditLog">{t.auditLog}</h3>
+      <button type="button" id="closeAuditLog" aria-label={t.close} data-i18n-aria-label="close">×</button>
+    </header>
+    <p class="audit-log-hint" data-i18n="auditLogHint">{t.auditLogHint}</p>
+    <div id="auditLogList" class="audit-log-list" aria-live="polite">
+      <p class="empty" data-i18n="auditLoading">{t.auditLoading}</p>
     </div>
   </section>
 </dialog>
@@ -80,9 +94,11 @@ const identity = authenticationDisabled ? t.authenticationDisabled : user.email 
         <input id="appendImportCheckbox" type="checkbox" checked />
         <span data-i18n="appendImport">{t.appendImport}</span>
       </label>
-      <label class="file-button">
-        <span data-i18n="chooseBookmarkHtml">{t.chooseBookmarkHtml}</span>
-        <input id="bookmarkHtmlInput" type="file" accept=".html,.htm,text/html" />
+      <label id="bookmarkDropZone" class="file-button import-drop-zone">
+        <strong data-i18n="chooseBookmarkHtml">{t.chooseBookmarkHtml}</strong>
+        <span data-i18n="dropBookmarkHtml">{t.dropBookmarkHtml}</span>
+        <small data-i18n="bookmarkHtmlRequirements">{t.bookmarkHtmlRequirements}</small>
+        <input id="bookmarkHtmlInput" type="file" accept=".html,.htm,text/html" multiple />
       </label>
     </section>
   </section>

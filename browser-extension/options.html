@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Okini Quick Add Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="icons/icon48.png" width="48" height="48" alt="" />
+        <div>
+          <h1>Okini Quick Add</h1>
+          <p>ツールバーの星をクリックして、現在のページをOkiniへ追加します。</p>
+        </div>
+      </header>
+
+      <form id="settingsForm">
+        <label>
+          <span>ダッシュボードURL</span>
+          <input id="dashboardUrl" type="url" placeholder="https://b.example.com" required />
+        </label>
+        <label>
+          <span>拡張機能APIトークン</span>
+          <input id="apiToken" type="password" autocomplete="off" required />
+          <small>Cloudflare SecretのEXTENSION_API_TOKENと同じ値を入力します。</small>
+        </label>
+        <label>
+          <span>既定タグ</span>
+          <textarea id="tagNames" rows="3" placeholder="Reading, Inbox"></textarea>
+          <small>カンマまたは改行で区切ります。存在しないタグは自動作成されます。</small>
+        </label>
+        <label class="check-row">
+          <input id="favorite" type="checkbox" />
+          <span>追加時にお気に入りにする</span>
+        </label>
+        <footer>
+          <button id="testButton" type="button">接続確認</button>
+          <button type="submit" class="primary">保存</button>
+        </footer>
+        <output id="status" role="status"></output>
+      </form>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

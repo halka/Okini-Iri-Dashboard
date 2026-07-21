@@ -60,8 +60,7 @@ function renderBookmark(bookmark: Bookmark, depth: number) {
   const attrs = [
     `HREF="${escapeAttribute(bookmark.url)}"`,
     bookmark.addDate ? `ADD_DATE="${bookmark.addDate}"` : "",
-    bookmark.faviconUrl ? `ICON="${escapeAttribute(bookmark.faviconUrl)}"` : "",
-    bookmark.vpnRequired ? 'VPN_REQUIRED="1"' : ""
+    bookmark.faviconUrl ? `ICON="${escapeAttribute(bookmark.faviconUrl)}"` : ""
   ].filter(Boolean);
   return `${indent}<DT><A ${attrs.join(" ")}>${escapeHtml(bookmark.title)}</A>`;
 }

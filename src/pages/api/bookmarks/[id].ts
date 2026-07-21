@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { deleteBookmark, getBookmark, updateBookmark } from "../../../lib/repositories/bookmarks";
+import { recordAuditLogSafely } from "../../../lib/repositories/audit";
 import { getDb } from "../../../lib/d1";
 import {
   ApiError,
@@ -22,7 +23,6 @@ type Payload = {
   description?: string;
   notes?: string;
   favorite?: boolean;
-  vpnRequired?: boolean;
   structuredPreviewEnabled?: boolean;
   tagIds?: string[];
 };
@@ -33,6 +33,7 @@ export const GET: APIRoute = apiRoute(async ({ locals, params }) => {
 });
 
 export const PATCH: APIRoute = apiRoute(async ({ locals, params, request }) => {
+  const id = requiredIdentifier(params.id);
   const body = await readJson<Payload>(request);
   const title = optionalText(body.title, "title", 500);
   if (title !== undefined && !title) throw new ApiError("title cannot be empty", 422, "validation_error");
@@ -40,7 +41,8 @@ export const PATCH: APIRoute = apiRoute(async ({ locals, params, request }) => {
   if (url !== undefined && !isSupportedBookmarkUrl(url)) {
     throw new ApiError("A supported URL is required", 422, "validation_error");
   }
-  const updated = await updateBookmark(getDb(locals), requiredIdentifier(params.id), {
+  const db = getDb(locals);
+  const updated = await updateBookmark(db, id, {
     title,
     url,
     folderId: optionalNullableId(body.folderId, "folderId"),
@@ -48,14 +50,34 @@ export const PATCH: APIRoute = apiRoute(async ({ locals, params, request }) => {
     description: optionalText(body.description, "description", 5_000),
     notes: optionalText(body.notes, "notes", 20_000),
     favorite: optionalBoolean(body.favorite, "favorite"),
-    vpnRequired: optionalBoolean(body.vpnRequired, "vpnRequired"),
     structuredPreviewEnabled: optionalBoolean(body.structuredPreviewEnabled, "structuredPreviewEnabled"),
     tagIds: optionalStringArray(body.tagIds, "tagIds")
   });
+  if (updated) {
+    const bookmark = await getBookmark(db, id);
+    await recordAuditLogSafely(db, locals.user, {
+      action: "bookmark.updated",
+      entityType: "bookmark",
+      entityId: id,
+      summary: bookmark?.title ?? title ?? id,
+      details: { fields: Object.keys(body) }
+    });
+  }
   return updated ? json({ ok: true }) : json({ error: "not found" }, 404);
 });
 
 export const DELETE: APIRoute = apiRoute(async ({ locals, params }) => {
-  const deleted = await deleteBookmark(getDb(locals), requiredIdentifier(params.id));
+  const id = requiredIdentifier(params.id);
+  const db = getDb(locals);
+  const bookmark = await getBookmark(db, id);
+  const deleted = await deleteBookmark(db, id);
+  if (deleted) {
+    await recordAuditLogSafely(db, locals.user, {
+      action: "bookmark.deleted",
+      entityType: "bookmark",
+      entityId: id,
+      summary: bookmark?.title ?? id
+    });
+  }
   return deleted ? json({ ok: true }) : json({ error: "not found" }, 404);
 });

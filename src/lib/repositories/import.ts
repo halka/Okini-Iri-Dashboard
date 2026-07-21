@@ -24,7 +24,6 @@ type NormalizedBookmark = {
   faviconUrl: string;
   sortOrder: number;
   addDate: number | null;
-  vpnRequired: boolean;
 };
 
 const IMPORT_CONCURRENCY = 6;
@@ -62,8 +61,8 @@ export async function importChromeBookmarks(
     db
       .prepare(
         `INSERT INTO bookmarks
-          (id, title, url, favicon_url, folder_id, description, vpn_required, sort_order, add_date, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+          (id, title, url, favicon_url, folder_id, description, sort_order, add_date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       )
       .bind(
         bookmark.id,
@@ -71,7 +70,6 @@ export async function importChromeBookmarks(
         bookmark.url,
         bookmark.faviconUrl,
         bookmark.description,
-        Number(bookmark.vpnRequired),
         bookmark.sortOrder,
         bookmark.addDate
       )
@@ -127,9 +125,11 @@ function normalizeImportedBookmarks(input: ChromeBookmarksImport) {
 
   const bookmarks = importedBookmarkItems.map((bookmark, index): NormalizedBookmark => {
     const fallbackFolderName = (bookmark.folderName ?? bookmark.folder ?? "").trim();
-    const tagNames = uniqueNames([...(bookmark.folderId ? pathFor(bookmark.folderId) : []), fallbackFolderName]).filter(
-      (name) => !isReservedTagName(name)
-    );
+    const tagNames = uniqueNames([
+      ...(bookmark.folderId ? pathFor(bookmark.folderId) : []),
+      fallbackFolderName,
+      ...(bookmark.tagNames ?? [])
+    ]).filter((name) => !isReservedTagName(name));
     return {
       id: crypto.randomUUID(),
       title: (bookmark.title ?? bookmark.name ?? "").trim(),
@@ -138,8 +138,7 @@ function normalizeImportedBookmarks(input: ChromeBookmarksImport) {
       description: bookmark.description?.trim() ?? "",
       faviconUrl: bookmark.faviconUrl?.trim() ?? "",
       sortOrder: bookmark.sortOrder ?? index,
-      addDate: bookmark.addDate ?? null,
-      vpnRequired: Boolean(bookmark.vpnRequired)
+      addDate: bookmark.addDate ?? null
     };
   });
   const tagNames = uniqueNames(bookmarks.flatMap((bookmark) => bookmark.tagNames));

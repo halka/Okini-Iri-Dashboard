@@ -1,4 +1,5 @@
 import type { Bookmark, BookmarkInput, Tag } from "../domain/bookmarks";
+import type { AuditAction, AuditLog } from "../domain/audit";
 import type { ColorMode } from "../config/preferences";
 import type { Locale, MessageKey } from "../i18n/messages";
 import { readTextBlob, UnsupportedTextEncodingError } from "../lib/text-encoding";
@@ -15,6 +16,7 @@ type DashboardState = {
   tagId: string;
   query: string;
   favoriteOnly: boolean;
+  selectedBookmarkIds: Set<string>;
 };
 
 const state: DashboardState = {
@@ -22,7 +24,8 @@ const state: DashboardState = {
   tags: [],
   tagId: "",
   query: "",
-  favoriteOnly: false
+  favoriteOnly: false,
+  selectedBookmarkIds: new Set()
 };
 
 const elements = {
@@ -35,6 +38,12 @@ const elements = {
   homeFilterButton: byId<HTMLButtonElement>("homeFilterButton"),
   newButton: byId<HTMLButtonElement>("newButton"),
   moveToTopButton: byId<HTMLButtonElement>("moveToTopButton"),
+  bulkActions: byId<HTMLElement>("bulkActions"),
+  bulkSelectionCount: byId<HTMLOutputElement>("bulkSelectionCount"),
+  bulkTagSelect: byId<HTMLSelectElement>("bulkTagSelect"),
+  bulkAddTag: byId<HTMLButtonElement>("bulkAddTag"),
+  bulkRemoveTag: byId<HTMLButtonElement>("bulkRemoveTag"),
+  bulkClear: byId<HTMLButtonElement>("bulkClear"),
   languageButton: byId<HTMLButtonElement>("languageButton"),
   themeButton: byId<HTMLButtonElement>("themeButton"),
   manageDataButton: byId<HTMLButtonElement>("manageDataButton"),
@@ -45,10 +54,13 @@ const elements = {
   deleteButton: byId<HTMLButtonElement>("deleteButton"),
   manager: byId<HTMLDialogElement>("manager"),
   tagManager: byId<HTMLDialogElement>("tagManager"),
+  auditLogDialog: byId<HTMLDialogElement>("auditLogDialog"),
+  auditLogList: byId<HTMLElement>("auditLogList"),
   importManager: byId<HTMLDialogElement>("importManager"),
   systemSettings: byId<HTMLDialogElement>("systemSettings"),
   tagManageList: byId<HTMLElement>("tagManageList"),
   bookmarkHtmlInput: byId<HTMLInputElement>("bookmarkHtmlInput"),
+  bookmarkDropZone: byId<HTMLElement>("bookmarkDropZone"),
   appendImportCheckbox: byId<HTMLInputElement>("appendImportCheckbox"),
   resetDataButton: byId<HTMLButtonElement>("resetDataButton"),
   importOverlay: byId<HTMLElement>("importOverlay"),
@@ -76,7 +88,6 @@ const elements = {
   bookmarkDetailsDomain: byId<HTMLElement>("bookmarkDetailsDomain"),
   bookmarkDetailsTags: byId<HTMLElement>("bookmarkDetailsTags"),
   bookmarkDetailsFavorite: byId<HTMLElement>("bookmarkDetailsFavorite"),
-  bookmarkDetailsVpnRequired: byId<HTMLElement>("bookmarkDetailsVpnRequired"),
   bookmarkDetailsStructuredPreview: byId<HTMLElement>("bookmarkDetailsStructuredPreview"),
   bookmarkDetailsFavicon: byId<HTMLElement>("bookmarkDetailsFavicon"),
   bookmarkDetailsDescription: byId<HTMLElement>("bookmarkDetailsDescription"),
@@ -115,6 +126,8 @@ let previewHistoryIndex = -1;
 let previewSearchIndex = -1;
 let previewSearchComposing = false;
 let previewSearchCompositionTimer = 0;
+let draggedBookmarkId = "";
+let importDragDepth = 0;
 
 const metadataFetchDelayMs = 5_000;
 const maxFaviconUploadBytes = 48 * 1024;
@@ -170,7 +183,7 @@ async function refresh() {
   elements.workspaceStatus.textContent = t("loading");
   const params = new URLSearchParams();
   if (state.query) params.set("q", state.query);
-  if (state.tagId && !state.query && !state.favoriteOnly) params.set("tagId", state.tagId);
+  if (state.tagId) params.set("tagId", state.tagId);
   if (state.favoriteOnly) params.set("favorite", "true");
 
   try {
@@ -182,6 +195,7 @@ async function refresh() {
     state.bookmarks = bookmarks;
     state.tags = tags;
     if (state.tagId && !tags.some((tag) => tag.id === state.tagId)) state.tagId = "";
+    state.selectedBookmarkIds = new Set([...state.selectedBookmarkIds].filter((id) => bookmarks.some((bookmark) => bookmark.id === id)));
     render();
   } catch (error) {
     elements.workspaceStatus.textContent = error instanceof Error ? error.message : t("genericError");
@@ -194,6 +208,7 @@ async function refresh() {
 function render() {
   renderTagFilter();
   renderFavoriteFilter();
+  renderBulkActions();
   renderManager();
   renderBookmarks();
   renderEditorTags();
@@ -210,6 +225,21 @@ function renderTagFilter() {
 function renderFavoriteFilter() {
   elements.favoriteOnlyButton.classList.toggle("is-active", state.favoriteOnly);
   elements.favoriteOnlyButton.setAttribute("aria-pressed", String(state.favoriteOnly));
+}
+
+function renderBulkActions() {
+  const hasSelection = state.selectedBookmarkIds.size > 0;
+  elements.bulkActions.hidden = !hasSelection;
+  elements.bulkSelectionCount.value = String(state.selectedBookmarkIds.size);
+  const selectedTagId = elements.bulkTagSelect.value;
+  elements.bulkTagSelect.innerHTML = [
+    `<option value="">${escapeHtml(t("chooseTag"))}</option>`,
+    ...state.tags.map((tag) => `<option value="${escapeAttribute(tag.id)}">${escapeHtml(tag.name)}</option>`)
+  ].join("");
+  elements.bulkTagSelect.value = state.tags.some((tag) => tag.id === selectedTagId) ? selectedTagId : "";
+  const hasTag = Boolean(elements.bulkTagSelect.value);
+  elements.bulkAddTag.disabled = !hasSelection || !hasTag;
+  elements.bulkRemoveTag.disabled = !hasSelection || !hasTag;
 }
 
 function scrollWorkspaceToTop() {
@@ -234,6 +264,7 @@ async function resetFilters() {
   state.tagId = "";
   state.query = "";
   state.favoriteOnly = false;
+  state.selectedBookmarkIds.clear();
   elements.tagSelect.value = "";
   elements.searchInput.value = "";
   renderFavoriteFilter();
@@ -260,14 +291,52 @@ function renderManager() {
     : `<p class="empty">${escapeHtml(t("noTags"))}</p>`;
 }
 
+const auditActionMessage: Record<AuditAction, MessageKey> = {
+  "bookmark.created": "auditBookmarkCreated",
+  "bookmark.updated": "auditBookmarkUpdated",
+  "bookmark.deleted": "auditBookmarkDeleted",
+  "bookmarks.reordered": "auditBookmarksReordered",
+  "bookmarks.tags_updated": "auditBookmarkTagsUpdated",
+  "bookmarks.imported": "auditBookmarksImported",
+  "tag.created": "auditTagCreated",
+  "tag.updated": "auditTagUpdated",
+  "tag.deleted": "auditTagDeleted",
+  "data.reset": "auditDataReset"
+};
+
+async function loadAuditLogs() {
+  elements.auditLogList.innerHTML = `<p class="empty">${escapeHtml(t("auditLoading"))}</p>`;
+  const { auditLogs } = await requestJson<{ auditLogs: AuditLog[] }>("/api/audit-logs?limit=100");
+  elements.auditLogList.innerHTML = auditLogs.length
+    ? auditLogs
+        .map((entry) => {
+          const actor = entry.actorEmail ? `${entry.actorName} · ${entry.actorEmail}` : entry.actorName;
+          const details = Object.keys(entry.details).length
+            ? `<details><summary>${escapeHtml(t("auditDetails"))}</summary><pre>${escapeHtml(JSON.stringify(entry.details, null, 2))}</pre></details>`
+            : "";
+          return `<article class="audit-log-entry">
+            <header>
+              <strong>${escapeHtml(t(auditActionMessage[entry.action]))}</strong>
+              <time datetime="${escapeAttribute(entry.createdAt)}">${escapeHtml(formatDateTime(entry.createdAt))}</time>
+            </header>
+            ${entry.summary ? `<p>${escapeHtml(entry.summary)}</p>` : ""}
+            <small>${escapeHtml(actor)}</small>
+            ${details}
+          </article>`;
+        })
+        .join("")
+    : `<p class="empty">${escapeHtml(t("auditEmpty"))}</p>`;
+}
+
 function renderBookmarks() {
+  const hasActiveFilters = Boolean(state.query || state.tagId || state.favoriteOnly);
   elements.workspaceStatus.textContent = state.bookmarks.length
     ? t("linksFound", { count: state.bookmarks.length })
-    : state.query || state.tagId || state.favoriteOnly
+    : hasActiveFilters
       ? t("noLinks")
       : t("importBookmarks");
   if (!state.bookmarks.length) {
-    const isUnfilteredView = !state.query && !state.tagId && !state.favoriteOnly;
+    const isUnfilteredView = !hasActiveFilters;
     elements.bookmarkList.innerHTML = isUnfilteredView
       ? `<section class="empty-panel first-run-panel">
           <h2>${escapeHtml(t("importBookmarks"))}</h2>
@@ -288,7 +357,6 @@ function renderBookmarks() {
           ? `<button type="button" class="ghost-link preview-link" data-preview="${escapeAttribute(bookmark.id)}">${escapeHtml(t("structuredPreview"))}</button>`
           : "";
       const tags = bookmark.tags.map((tag) => `<span class="card-tag">${escapeHtml(tag.name)}</span>`).join("");
-      const vpnBadge = bookmark.vpnRequired ? `<span class="card-vpn-badge">${escapeHtml(t("vpnRequired"))}</span>` : "";
       const main = isOpenable
         ? `<a class="card-main-link" href="${escapeAttribute(bookmark.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="${escapeAttribute(t("openLinkLabel", { title: bookmark.title }))}">
           ${faviconHtml(bookmark)}
@@ -304,13 +372,15 @@ function renderBookmarks() {
             <span class="card-host">${escapeHtml(safeHost(bookmark.url))}</span>
           </div>
         </div>`;
-      return `<article class="bookmark-card">
+      const selected = state.selectedBookmarkIds.has(bookmark.id);
+      return `<article class="bookmark-card${selected ? " is-selected" : ""}" data-bookmark-id="${escapeAttribute(bookmark.id)}"${hasActiveFilters ? "" : " draggable=\"true\""}>
+        <input class="bookmark-select" type="checkbox" data-select-bookmark="${escapeAttribute(bookmark.id)}"${selected ? " checked" : ""} aria-label="${escapeAttribute(t("selectBookmark", { title: bookmark.title }))}" />
         <div class="card-main">
           ${main}
         </div>
         <div class="card-preview-row">${previewAction}</div>
         <div class="card-footer">
-          <div class="card-tags">${vpnBadge}${tags}</div>
+          <div class="card-tags">${tags}</div>
           <div class="card-actions">
             <button type="button" class="edit-link" data-edit="${escapeAttribute(bookmark.id)}">${escapeHtml(t("edit"))}</button>
             <button type="button" class="ghost-link" data-details="${escapeAttribute(bookmark.id)}">${escapeHtml(t("descriptionNotes"))}</button>
@@ -354,7 +424,6 @@ function openEditor(bookmark?: Bookmark) {
   formControl<HTMLInputElement>(elements.form, "description").value = bookmark?.description ?? "";
   formControl<HTMLTextAreaElement>(elements.form, "notes").value = bookmark?.notes ?? "";
   formControl<HTMLInputElement>(elements.form, "favorite").checked = Boolean(bookmark?.favorite);
-  formControl<HTMLInputElement>(elements.form, "vpnRequired").checked = Boolean(bookmark?.vpnRequired);
   formControl<HTMLInputElement>(elements.form, "structuredPreviewEnabled").checked = Boolean(bookmark?.structuredPreviewEnabled);
   renderEditorTags(new Set(bookmark?.tags.map((tag) => tag.id) ?? []));
   updateFaviconPreview(bookmark?.faviconUrl ?? "", bookmark?.title ?? "");
@@ -374,7 +443,6 @@ function bookmarkPayload(): BookmarkInput {
     description: String(data.get("description") ?? ""),
     notes: String(data.get("notes") ?? ""),
     favorite: data.get("favorite") === "on",
-    vpnRequired: data.get("vpnRequired") === "on",
     structuredPreviewEnabled: data.get("structuredPreviewEnabled") === "on",
     tagIds: Array.from(elements.editorTags.querySelectorAll<HTMLInputElement>("input[type='checkbox']:checked"), (option) => option.value)
   };
@@ -442,7 +510,6 @@ function openBookmarkDetails(bookmark: Bookmark) {
   elements.bookmarkDetailsDomain.textContent = safeHost(bookmark.url) || t("emptyValue");
   elements.bookmarkDetailsTags.textContent = bookmark.tags.length ? bookmark.tags.map((tag) => tag.name).join(", ") : t("emptyValue");
   elements.bookmarkDetailsFavorite.textContent = t(bookmark.favorite ? "yes" : "no");
-  elements.bookmarkDetailsVpnRequired.textContent = t(bookmark.vpnRequired ? "yes" : "no");
   elements.bookmarkDetailsStructuredPreview.textContent = t(bookmark.structuredPreviewEnabled ? "yes" : "no");
   elements.bookmarkDetailsFavicon.textContent = bookmark.faviconUrl || t("emptyValue");
   elements.bookmarkDetailsDescription.textContent = bookmark.description || t("emptyDescription");
@@ -454,7 +521,8 @@ function openBookmarkDetails(bookmark: Bookmark) {
 }
 
 function formatDateTime(value: string) {
-  const date = new Date(value);
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value) ? `${value.replace(" ", "T")}Z` : value;
+  const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? value || t("emptyValue") : date.toLocaleString();
 }
 
@@ -671,16 +739,20 @@ async function updateManagedTag(id: string) {
   showToast(t("tagUpdated"));
 }
 
-async function importBookmarkHtml(input: HTMLInputElement) {
-  const file = input.files?.[0];
-  if (!file) return;
-  if (!/\.html?$/i.test(file.name) && file.type !== "text/html") {
-    input.value = "";
+async function importBookmarkHtml(files: File[]) {
+  if (!files.length) return;
+  if (files.length > 20 || files.reduce((total, file) => total + file.size, 0) > 50 * 1024 * 1024) {
+    elements.bookmarkHtmlInput.value = "";
+    showToast(t("importBatchTooLarge"));
+    return;
+  }
+  if (files.some((file) => !/\.html?$/i.test(file.name) && file.type !== "text/html")) {
+    elements.bookmarkHtmlInput.value = "";
     showToast(t("invalidBookmarkHtml"));
     return;
   }
-  if (file.size > 10 * 1024 * 1024) {
-    input.value = "";
+  if (files.some((file) => file.size > 10 * 1024 * 1024)) {
+    elements.bookmarkHtmlInput.value = "";
     showToast(t("importFileTooLarge"));
     return;
   }
@@ -688,7 +760,7 @@ async function importBookmarkHtml(input: HTMLInputElement) {
   const append = elements.appendImportCheckbox.checked;
   const force = !append && (state.bookmarks.length > 0 || state.tags.length > 0);
   if (force && !(await confirmAction(t("confirmReplaceBookmarks"), t("import")))) {
-    input.value = "";
+    elements.bookmarkHtmlInput.value = "";
     return;
   }
 
@@ -697,11 +769,13 @@ async function importBookmarkHtml(input: HTMLInputElement) {
   updateImportProgress(0, 0, 0);
   elements.importOverlay.hidden = false;
   try {
-    const html = await readTextBlob(file);
+    const importedFiles = await Promise.all(
+      files.map(async (file) => ({ html: await readTextBlob(file), source: file.name }))
+    );
     let completed = false;
     await requestJsonLines<ImportStreamMessage>(
       "/api/import",
-      { method: "POST", body: JSON.stringify({ html, source: file.name, force, append }) },
+      { method: "POST", body: JSON.stringify({ files: importedFiles, force, append }) },
       (message) => {
         if (message.type === "progress") {
           updateImportProgress(message.completed, message.total, message.percent);
@@ -719,7 +793,7 @@ async function importBookmarkHtml(input: HTMLInputElement) {
     if (error instanceof UnsupportedTextEncodingError) showToast(t("unsupportedBookmarkEncoding"));
     else showError(error);
   } finally {
-    input.value = "";
+    elements.bookmarkHtmlInput.value = "";
   }
 }
 
@@ -806,6 +880,28 @@ async function toggleFavorite(id: string) {
   await refresh();
 }
 
+async function bulkUpdateTags(operation: "add" | "remove") {
+  const tagId = elements.bulkTagSelect.value;
+  const bookmarkIds = [...state.selectedBookmarkIds];
+  if (!tagId || !bookmarkIds.length) return;
+  await requestJson("/api/bookmarks/bulk", {
+    method: "PATCH",
+    body: JSON.stringify(operation === "add" ? { bookmarkIds, addTagIds: [tagId] } : { bookmarkIds, removeTagIds: [tagId] })
+  });
+  state.selectedBookmarkIds.clear();
+  await refresh();
+}
+
+async function persistDraggedOrder() {
+  const ids = Array.from(elements.bookmarkList.querySelectorAll<HTMLElement>("[data-bookmark-id]"), (card) => card.dataset.bookmarkId ?? "").filter(Boolean);
+  if (!ids.length) return;
+  await requestJson("/api/bookmarks/reorder", {
+    method: "PATCH",
+    body: JSON.stringify({ ids })
+  });
+  await refresh();
+}
+
 function setFormBusy(form: HTMLFormElement, busy: boolean) {
   form.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
     button.disabled = busy;
@@ -855,6 +951,44 @@ elements.workspace.addEventListener("scroll", () => {
 });
 elements.homeFilterButton.addEventListener("click", () => resetFilters().catch(showError));
 elements.bookmarkList.addEventListener("click", handleBookmarkListClick);
+elements.bookmarkList.addEventListener("change", (event) => {
+  const input = (event.target as Element).closest<HTMLInputElement>("[data-select-bookmark]");
+  if (!input) return;
+  const id = input.dataset.selectBookmark ?? "";
+  if (input.checked) state.selectedBookmarkIds.add(id);
+  else state.selectedBookmarkIds.delete(id);
+  input.closest<HTMLElement>("[data-bookmark-id]")?.classList.toggle("is-selected", input.checked);
+  renderBulkActions();
+});
+elements.bookmarkList.addEventListener("dragstart", (event) => {
+  const card = (event.target as Element).closest<HTMLElement>("[data-bookmark-id]");
+  if (!card || !card.draggable) return;
+  draggedBookmarkId = card.dataset.bookmarkId ?? "";
+  card.classList.add("is-dragging");
+  event.dataTransfer?.setData("text/plain", draggedBookmarkId);
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+});
+elements.bookmarkList.addEventListener("dragover", (event) => {
+  if (!draggedBookmarkId) return;
+  const card = (event.target as Element).closest<HTMLElement>("[data-bookmark-id]");
+  if (!card || card.dataset.bookmarkId === draggedBookmarkId) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+});
+elements.bookmarkList.addEventListener("drop", (event) => {
+  if (!draggedBookmarkId) return;
+  const targetCard = (event.target as Element).closest<HTMLElement>("[data-bookmark-id]");
+  const draggedCard = elements.bookmarkList.querySelector<HTMLElement>(`[data-bookmark-id="${CSS.escape(draggedBookmarkId)}"]`);
+  if (!targetCard || !draggedCard || targetCard === draggedCard) return;
+  event.preventDefault();
+  const insertAfter = event.clientY > targetCard.getBoundingClientRect().top + targetCard.offsetHeight / 2;
+  targetCard.parentElement?.insertBefore(draggedCard, insertAfter ? targetCard.nextSibling : targetCard);
+  persistDraggedOrder().catch(showError);
+});
+elements.bookmarkList.addEventListener("dragend", (event) => {
+  (event.target as Element).closest<HTMLElement>("[data-bookmark-id]")?.classList.remove("is-dragging");
+  draggedBookmarkId = "";
+});
 byId<HTMLButtonElement>("closeEditor").addEventListener("click", () => elements.editor.close());
 byId<HTMLButtonElement>("closePreview").addEventListener("click", () => elements.structuredPreview.close());
 byId<HTMLButtonElement>("closeBookmarkDetails").addEventListener("click", () => elements.bookmarkDetailsDialog.close());
@@ -945,6 +1079,12 @@ byId<HTMLButtonElement>("openTagManager").addEventListener("click", () => {
   elements.tagManager.showModal();
 });
 byId<HTMLButtonElement>("closeTagManager").addEventListener("click", () => elements.tagManager.close());
+byId<HTMLButtonElement>("openAuditLog").addEventListener("click", () => {
+  elements.manager.close();
+  elements.auditLogDialog.showModal();
+  loadAuditLogs().catch(showError);
+});
+byId<HTMLButtonElement>("closeAuditLog").addEventListener("click", () => elements.auditLogDialog.close());
 byId<HTMLButtonElement>("openImportManager").addEventListener("click", () => {
   elements.manager.close();
   elements.importManager.showModal();
@@ -955,7 +1095,31 @@ byId<HTMLButtonElement>("openSystemSettings").addEventListener("click", () => {
   elements.systemSettings.showModal();
 });
 byId<HTMLButtonElement>("closeSystemSettings").addEventListener("click", () => elements.systemSettings.close());
-elements.bookmarkHtmlInput.addEventListener("change", () => importBookmarkHtml(elements.bookmarkHtmlInput).catch(showError));
+elements.bookmarkHtmlInput.addEventListener("change", () => {
+  importBookmarkHtml(Array.from(elements.bookmarkHtmlInput.files ?? [])).catch(showError);
+});
+elements.bookmarkDropZone.addEventListener("dragenter", (event) => {
+  if (!event.dataTransfer?.types.includes("Files")) return;
+  event.preventDefault();
+  importDragDepth += 1;
+  elements.bookmarkDropZone.classList.add("is-dragover");
+});
+elements.bookmarkDropZone.addEventListener("dragover", (event) => {
+  if (!event.dataTransfer?.types.includes("Files")) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+});
+elements.bookmarkDropZone.addEventListener("dragleave", () => {
+  importDragDepth = Math.max(0, importDragDepth - 1);
+  if (!importDragDepth) elements.bookmarkDropZone.classList.remove("is-dragover");
+});
+elements.bookmarkDropZone.addEventListener("drop", (event) => {
+  if (!event.dataTransfer?.files.length) return;
+  event.preventDefault();
+  importDragDepth = 0;
+  elements.bookmarkDropZone.classList.remove("is-dragover");
+  importBookmarkHtml(Array.from(event.dataTransfer.files)).catch(showError);
+});
 elements.resetDataButton.addEventListener("click", () => resetData().catch(showError));
 elements.tagSelect.addEventListener("change", () => {
   state.tagId = elements.tagSelect.value;
@@ -967,10 +1131,17 @@ elements.searchInput.addEventListener("input", () => {
   searchTimer = window.setTimeout(() => refresh().catch(showError), 220);
 });
 elements.favoriteOnlyButton.addEventListener("click", () => {
-  if (!state.favoriteOnly && !state.bookmarks.some((bookmark) => bookmark.favorite)) return;
   state.favoriteOnly = !state.favoriteOnly;
   renderFavoriteFilter();
   refresh().catch(showError);
+});
+elements.bulkTagSelect.addEventListener("change", renderBulkActions);
+elements.bulkAddTag.addEventListener("click", () => bulkUpdateTags("add").catch(showError));
+elements.bulkRemoveTag.addEventListener("click", () => bulkUpdateTags("remove").catch(showError));
+elements.bulkClear.addEventListener("click", () => {
+  state.selectedBookmarkIds.clear();
+  renderBookmarks();
+  renderBulkActions();
 });
 elements.tagManageList.addEventListener("click", (event) => {
   const saveButton = (event.target as Element).closest<HTMLButtonElement>("[data-save-tag]");

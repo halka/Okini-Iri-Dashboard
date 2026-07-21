@@ -5,7 +5,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status = 400,
-    readonly code = "bad_request"
+    readonly code = "bad_request",
+    readonly headers?: HeadersInit
   ) {
     super(message);
   }
@@ -54,14 +55,14 @@ export async function readJson<T>(request: Request, maxBytes = 256 * 1024): Prom
   }
 }
 
-export function json(data: unknown, status = 200) {
+export function json(data: unknown, status = 200, extraHeaders?: HeadersInit) {
+  const headers = new Headers(extraHeaders);
+  headers.set("cache-control", "no-store");
+  headers.set("content-type", "application/json; charset=utf-8");
+  headers.set("x-content-type-options", "nosniff");
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      "cache-control": "no-store",
-      "content-type": "application/json; charset=utf-8",
-      "x-content-type-options": "nosniff"
-    }
+    headers
   });
 }
 
@@ -71,7 +72,7 @@ export function apiRoute(handler: APIRoute): APIRoute {
       return await handler(context);
     } catch (error) {
       if (error instanceof ApiError) {
-        return json({ error: error.message, code: error.code }, error.status);
+        return json({ error: error.message, code: error.code }, error.status, error.headers);
       }
 
       const message = error instanceof Error ? error.message : String(error);

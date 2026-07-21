@@ -1,6 +1,7 @@
 import type { ChromeBookmarksImport } from "../domain/bookmarks";
 
 const chromeRootFolderNames = new Set(["ブックマーク バー", "bookmarks bar"]);
+const vpnRequiredTagName = "VPN Required";
 
 export function parseChromeBookmarksHtml(html: string, source = "uploaded-bookmarks.html"): ChromeBookmarksImport {
   const stack: Array<{ id: string | null; name: string }> = [];
@@ -70,7 +71,7 @@ export function parseChromeBookmarksHtml(html: string, source = "uploaded-bookma
       folderId,
       sortOrder: bookmarks.filter((bookmark) => bookmark.folderId === folderId).length,
       addDate: Number(attr(attrs, "ADD_DATE")) || null,
-      vpnRequired: attr(attrs, "VPN_REQUIRED") === "1"
+      tagNames: attr(attrs, "VPN_REQUIRED") === "1" ? [vpnRequiredTagName] : []
     });
     cursor = contentEnd + html.slice(contentEnd).match(/^<\/A>/i)![0].length;
   }

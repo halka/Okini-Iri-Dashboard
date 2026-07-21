@@ -14,6 +14,11 @@ export async function listTags(db: D1Database): Promise<Tag[]> {
   return result.results.map(mapTag);
 }
 
+export async function getTag(db: D1Database, id: string): Promise<Tag | null> {
+  const row = await db.prepare("SELECT id, name, primary_color FROM tags WHERE id = ?").bind(id).first<D1Row>();
+  return row ? mapTag(row) : null;
+}
+
 export async function createTag(db: D1Database, input: { name: string; primaryColor: string }) {
   const id = crypto.randomUUID();
   await db
@@ -21,6 +26,27 @@ export async function createTag(db: D1Database, input: { name: string; primaryCo
     .bind(id, input.name.trim(), input.primaryColor)
     .run();
   return { id };
+}
+
+export async function ensureTagIdsByName(db: D1Database, names: string[]) {
+  const normalizedNames = [...new Map(names.map((name) => [name.trim().toLocaleLowerCase(), name.trim()])).values()].filter(
+    (name) => name && !isReservedTagName(name)
+  );
+  const existing = await listTags(db);
+  const idsByName = new Map(existing.map((tag) => [tag.name.toLocaleLowerCase(), tag.id]));
+  const missing = normalizedNames.filter((name) => !idsByName.has(name.toLocaleLowerCase()));
+  if (missing.length) {
+    await db.batch(
+      missing.map((name) =>
+        db
+          .prepare("INSERT OR IGNORE INTO tags (id, name, primary_color, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)")
+          .bind(crypto.randomUUID(), name, "#4f8cff")
+      )
+    );
+  }
+  const refreshed = missing.length ? await listTags(db) : existing;
+  const refreshedIds = new Map(refreshed.map((tag) => [tag.name.toLocaleLowerCase(), tag.id]));
+  return normalizedNames.map((name) => refreshedIds.get(name.toLocaleLowerCase())).filter((id): id is string => Boolean(id));
 }
 
 export async function updateTag(db: D1Database, id: string, input: { name?: string; primaryColor?: string }) {

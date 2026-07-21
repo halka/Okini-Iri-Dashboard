@@ -11,6 +11,7 @@ interface Env {
   OIDC_ALLOWED_EMAILS?: string;
   OIDC_ALLOWED_DOMAINS?: string;
   AUTH_SESSION_TTL_SECONDS?: string;
+  EXTENSION_API_TOKEN?: string;
 }
 
 type Runtime = import("@astrojs/cloudflare").Runtime<Env>;
@@ -41,5 +42,6 @@ declare namespace Cloudflare {
     OIDC_ALLOWED_EMAILS?: string;
     OIDC_ALLOWED_DOMAINS?: string;
     AUTH_SESSION_TTL_SECONDS?: string;
+    EXTENSION_API_TOKEN?: string;
   }
 }

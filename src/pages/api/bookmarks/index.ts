@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { createBookmark, listBookmarks } from "../../../lib/repositories/bookmarks";
+import { recordAuditLogSafely } from "../../../lib/repositories/audit";
 import { getDb } from "../../../lib/d1";
 import {
   ApiError,
@@ -24,7 +25,6 @@ type Payload = {
   description?: string;
   notes?: string;
   favorite?: boolean;
-  vpnRequired?: boolean;
   structuredPreviewEnabled?: boolean;
   tagIds?: string[];
 };
@@ -47,7 +47,8 @@ export const POST: APIRoute = apiRoute(async ({ locals, request }) => {
   const title = requiredText(body.title, "title", 500);
   const url = requiredText(body.url, "url", 65_536);
   if (!isSupportedBookmarkUrl(url)) throw new ApiError("A supported URL is required", 422, "validation_error");
-  const result = await createBookmark(getDb(locals), {
+  const db = getDb(locals);
+  const result = await createBookmark(db, {
     title,
     url,
     faviconUrl: optionalText(body.faviconUrl, "faviconUrl", 65_536),
@@ -55,9 +56,14 @@ export const POST: APIRoute = apiRoute(async ({ locals, request }) => {
     description: optionalText(body.description, "description", 5_000),
     notes: optionalText(body.notes, "notes", 20_000),
     favorite: optionalBoolean(body.favorite, "favorite"),
-    vpnRequired: optionalBoolean(body.vpnRequired, "vpnRequired"),
     structuredPreviewEnabled: optionalBoolean(body.structuredPreviewEnabled, "structuredPreviewEnabled"),
     tagIds: optionalStringArray(body.tagIds, "tagIds")
+  });
+  await recordAuditLogSafely(db, locals.user, {
+    action: "bookmark.created",
+    entityType: "bookmark",
+    entityId: result.id,
+    summary: title
   });
   return json(result, 201);
 });

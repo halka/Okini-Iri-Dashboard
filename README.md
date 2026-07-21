@@ -7,38 +7,82 @@ Production access can be protected by OpenID Connect (OIDC). When OIDC is config
 
 
 
-## Screenshot
+## Why This Exists
 
-Light mode:
+Browser bookmark exports are portable, but they become difficult to search, reorganize, and inspect once the collection grows. Hosted bookmark services solve that problem by taking ownership of the data and account. Okini Iri Dashboard is the middle path: a focused visual dashboard that keeps deployment, storage, authentication policy, and exports under your control.
+
+The project is built for personal and small-team use where a bookmark should be quick to find, easy to tag, and simple to move elsewhere. Chrome-compatible import/export avoids lock-in, while Cloudflare D1 and optional OIDC make the same collection available across desktop and mobile without running a traditional server.
+
+## Visual Feature Tour
+
+### Browse, search, and organize
+
+The light dashboard keeps search, tags, favorites, bulk selection, and bookmark actions in one compact workspace.
 
 ![Okini Iri Dashboard light mode screenshot](docs/screenshot-dashboard-light.png)
 
-Dark mode:
+- Search titles, URLs, descriptions, notes, and tag names.
+- Combine text, tag, and favorite filters.
+- Select multiple cards to add or remove tags in bulk.
+- Drag unfiltered cards to persist a custom order.
+
+### Dark mode and responsive cards
+
+Dark mode uses the same information density and follows the saved or device color preference. Browser chrome colors are synchronized on supported mobile browsers.
 
 ![Okini Iri Dashboard dark mode screenshot](docs/screenshot-dashboard-dark.png)
 
-## Quick Start
+- Cards expose favicon, title, domain, tags, Pretty view, details, editing, and favorite state.
+- Long titles are truncated without moving card actions.
+- Phone, tablet, and desktop layouts use the same workflows.
 
-To deploy your own dashboard, use the Cloudflare button above, then complete the D1 and KV configuration in [Cloudflare Setup](#cloudflare-setup). OIDC is optional.
+### Import Chrome bookmarks
 
-To try it locally:
+Import one or more Chrome/Netscape bookmark HTML files. Folder names become tags, existing records can be preserved, and progress shows the current count and percentage.
+
+![Chrome bookmark import demo](docs/import-demo.gif)
+
+- UTF-8, Shift_JIS, EUC-JP, and ISO-2022-JP text are normalized.
+- Metadata and absolute favicon URLs are fetched while progress is streamed.
+- Legacy `VPN_REQUIRED="1"` values become the regular **VPN Required** tag.
+
+## Five-Minute Local Start
+
+You need Node.js 22.12 or later and npm. OIDC and a Cloudflare account are not required for local use.
+
+1. Clone the repository and install dependencies.
 
 ```sh
+git clone https://github.com/halka/Okini-Iri-Dashboard.git
+cd Okini-Iri-Dashboard
 npm ci
+```
+
+2. Build the Worker and prepare the local D1 database.
+
+```sh
 npm run rebuild:local
+```
+
+3. Start the local Worker.
+
+```sh
 npm run preview
 ```
 
-Open [http://localhost:8787](http://localhost:8787), then choose **Import** from the empty state or **Menu > Import** to load a Chrome bookmark HTML file.
+Open [http://localhost:8787](http://localhost:8787). Select **Import** on the empty screen, or open **Menu > Import**, and choose or drop one or more Chrome bookmark HTML exports. Local records persist under `.wrangler/state` between runs.
+
+For production, create the Cloudflare resources once, update `wrangler.toml`, then run `npm run deploy`. OIDC remains optional.
 
 ## Using the Dashboard
 
 1. Select **Add** and enter a URL. After the URL remains unchanged for about five seconds, the dashboard automatically fetches the resolved URL, title, description, and favicon. Use **Fetch** or **Refetch** to run that step immediately.
-2. Review the fetched fields, choose tags, mark favorites or VPN-required links when needed, then save the bookmark. New tags can also be created from the editor.
-3. Use search, **All**, a tag, or **Favorites** to narrow the list. Search includes tag names. Selecting the app title in the header clears active filters and returns to the top.
-4. Bookmark cards show favicon, title, domain, tags, favorite state, and a VPN badge when the link requires VPN. Select **Details** for full record data, or **Pretty view** when JSON/XML preview is enabled for that bookmark.
+2. Review the fetched fields, choose tags such as **VPN Required**, mark favorites when needed, then save the bookmark. New tags can also be created from the editor.
+3. Use search, **All**, a tag, or **Favorites** to narrow the list. Search includes tag names, and filters can be combined. Selecting the app title in the header clears active filters and returns to the top.
+4. Bookmark cards show favicon, title, domain, tags, and favorite state. Select **Details** for full record data, or **Pretty view** when JSON/XML preview is enabled for that bookmark.
+5. Select cards for bulk tag operations. With no active filter, drag cards to change their order.
 
-The header menu keeps account information and sign-out controls separate from **Manage tags**, **Import**, **Export**, and **System settings**. System settings contains the full-reset control.
+The header menu keeps account information and sign-out controls separate from **Manage tags**, **Import**, **Export**, **Audit log**, and **System settings**. Audit log shows the latest write operations and actors; System settings contains the full-reset control.
 
 ## Mobile Browser Colors
 
@@ -55,8 +99,9 @@ This supports Safari Home Screen web apps and edge-to-edge layouts in Chrome 135
 ## Table of Contents
 
 - [Okini Iri Dashboard](#okini-iri-dashboard)
-  - [Screenshot](#screenshot)
-  - [Quick Start](#quick-start)
+  - [Why This Exists](#why-this-exists)
+  - [Visual Feature Tour](#visual-feature-tour)
+  - [Five-Minute Local Start](#five-minute-local-start)
   - [Using the Dashboard](#using-the-dashboard)
   - [Mobile Browser Colors](#mobile-browser-colors)
   - [Table of Contents](#table-of-contents)
@@ -64,6 +109,7 @@ This supports Safari Home Screen web apps and edge-to-edge layouts in Chrome 135
   - [Cloudflare Setup](#cloudflare-setup)
     - [OIDC Setup](#oidc-setup)
     - [OIDC settings](#oidc-settings)
+  - [Browser Extension](#browser-extension)
   - [Local Development](#local-development)
   - [Docker](#docker)
   - [Apple Container](#apple-container)
@@ -108,19 +154,19 @@ Replace the placeholders in `wrangler.toml`:
 
 ### OIDC Setup
 
-Register the following redirect URI with your OIDC provider:
+Okini Iri Dashboard is an OIDC relying party using the Authorization Code flow with PKCE. Create a server-side web application in the provider, then register this exact callback URL:
 
 ```text
 https://your-dashboard.example.com/auth/callback
 ```
 
-If the provider supports RP-initiated logout, also register:
+If the provider supports RP-initiated logout, register this post-logout URL too:
 
 ```text
 https://your-dashboard.example.com/auth/signed-out
 ```
 
-To protect the dashboard with OIDC, add non-secret settings to `wrangler.toml` for the first production login:
+Copy the provider's issuer URL and client ID into `wrangler.toml`. The issuer must be the base issuer advertised by the provider's `/.well-known/openid-configuration`, not its authorization endpoint:
 
 ```toml
 [vars]
@@ -139,6 +185,125 @@ npx wrangler secret put OIDC_CLIENT_SECRET
 
 Worker environment variables take priority over KV-backed OIDC settings. `OIDC_CLIENT_SECRET` always stays in Cloudflare Secrets and is never committed.
 
+#### Auth0 example
+
+1. In Auth0, create an application of type **Regular Web Application**.
+2. In **Allowed Callback URLs**, add `https://your-dashboard.example.com/auth/callback`.
+3. In **Allowed Logout URLs**, add `https://your-dashboard.example.com/auth/signed-out`.
+4. Use `https://YOUR_TENANT_REGION.auth0.com/` as `OIDC_ISSUER_URL`, and copy the application's Client ID to `OIDC_CLIENT_ID`.
+5. Store the Client Secret with `npx wrangler secret put OIDC_CLIENT_SECRET`. Keep the default `client_secret_basic` method unless the Auth0 application is configured differently.
+
+Auth0 documents these values and redirect allowlists in its [Application Settings reference](https://auth0.com/docs/get-started/applications/application-settings). Use the canonical tenant domain consistently unless the application is fully configured for an Auth0 custom domain.
+
+```toml
+[vars]
+OIDC_ISSUER_URL = "https://your-tenant.us.auth0.com/"
+OIDC_CLIENT_ID = "your-auth0-client-id"
+OIDC_SCOPES = "openid profile email"
+OIDC_ALLOWED_EMAILS = "you@example.com"
+```
+
+#### Cloudflare Zero Trust example
+
+Cloudflare Access can act as the OIDC provider, while Okini Iri Dashboard remains the OIDC application.
+
+1. Go to **Zero Trust > Access controls > Applications** and create a **SaaS application** using **OIDC**.
+2. Add `https://your-dashboard.example.com/auth/callback` as the Redirect URL and enable the `openid`, `profile`, and `email` claims.
+3. Add an Access Allow policy for the identities that may use the dashboard. Access applications deny access until an Allow policy matches.
+4. Copy the generated Issuer, Client ID, and Client Secret. The issuer has the form shown below; Cloudflare also exposes a discovery endpoint for it.
+5. Store the secret with Wrangler and keep `OIDC_ALLOWED_EMAILS` or `OIDC_ALLOWED_DOMAINS` as an application-level second allowlist.
+
+Cloudflare's [Generic OIDC application guide](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/saas-apps/generic-oidc-saas/) shows where to obtain the issuer, discovery endpoint, credentials, and policy settings.
+
+```toml
+[vars]
+OIDC_ISSUER_URL = "https://your-team.cloudflareaccess.com/cdn-cgi/access/sso/oidc/your-client-id"
+OIDC_CLIENT_ID = "your-cloudflare-access-client-id"
+OIDC_TOKEN_AUTH_METHOD = "client_secret_basic"
+OIDC_SCOPES = "openid profile email"
+OIDC_ALLOWED_DOMAINS = "example.com"
+```
+
+#### GitHub example (through Cloudflare Access)
+
+GitHub OAuth cannot be connected directly to this dashboard's OIDC client. GitHub publishes discovery metadata for specific OAuth discovery use cases, but its user OAuth flow does not currently issue OIDC ID tokens. Use GitHub as the upstream identity provider in Cloudflare Access, then use the Cloudflare Access OIDC application from the preceding example as Okini Iri Dashboard's provider.
+
+1. In GitHub, create an OAuth App whose authorization callback URL is `https://YOUR_TEAM.cloudflareaccess.com/cdn-cgi/access/callback`.
+2. In **Cloudflare Zero Trust > Integrations > Identity providers**, add **GitHub** and enter that OAuth App's Client ID and Client Secret.
+3. Test the GitHub identity provider, then attach it to the Cloudflare Access SaaS OIDC application used for Okini Iri Dashboard.
+4. Add an Access Allow policy for the required GitHub organization or team. Keep the dashboard's own email/domain allowlist as a second check when appropriate.
+5. Use the Cloudflare Access Issuer, Client ID, Client Secret, and `wrangler.toml` values shown in the Cloudflare Zero Trust example above.
+
+See Cloudflare's [GitHub identity provider guide](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/github/) for the upstream OAuth App and organization/team policy setup. GitHub's [authentication discovery documentation](https://docs.github.com/en/apps/github-authentication-discovery-endpoints) explains why its OAuth flow cannot be used here as a direct OIDC issuer.
+
+#### Google Workspace example
+
+Google Workspace uses Google's OpenID Connect service. Restrict the Google OAuth consent screen to **Internal** when only users in the Workspace organization should sign in, and keep `OIDC_ALLOWED_DOMAINS` as an application-level check.
+
+1. In Google Cloud Console, configure the OAuth consent screen and create an OAuth client of type **Web application**.
+2. Add `https://your-dashboard.example.com/auth/callback` to **Authorized redirect URIs**. The value must match exactly, including scheme, host, path, and trailing slash behavior.
+3. Copy the Client ID to `OIDC_CLIENT_ID` and store the Client Secret with Wrangler.
+4. Use Google's fixed issuer, `https://accounts.google.com`, and request `openid profile email`.
+
+Google documents the issuer, discovery metadata, scopes, and redirect URI requirements in its [OpenID Connect guide](https://developers.google.com/identity/openid-connect/openid-connect).
+
+```toml
+[vars]
+OIDC_ISSUER_URL = "https://accounts.google.com"
+OIDC_CLIENT_ID = "your-google-client-id.apps.googleusercontent.com"
+OIDC_TOKEN_AUTH_METHOD = "client_secret_basic"
+OIDC_SCOPES = "openid profile email"
+OIDC_ALLOWED_DOMAINS = "example.com"
+```
+
+#### Microsoft Entra ID example
+
+Use a tenant-specific issuer for a personal or single-organization dashboard. This keeps issuer validation unambiguous and avoids the issuer templates returned by the `common` and `organizations` metadata endpoints.
+
+1. Go to **Microsoft Entra ID > App registrations**, create a registration, and select the intended single-tenant account type.
+2. Under **Authentication**, add a **Web** redirect URI: `https://your-dashboard.example.com/auth/callback`.
+3. Under **Certificates & secrets**, create a client secret and store its value with Wrangler. The secret value is shown only when it is created.
+4. Copy the **Application (client) ID** and **Directory (tenant) ID** from the app overview.
+5. Use the tenant-specific v2.0 issuer and `client_secret_post`, which is advertised by Entra ID's v2.0 discovery metadata.
+
+Microsoft documents the tenant authority, discovery endpoint, and redirect behavior in its [OpenID Connect protocol guide](https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc).
+
+```toml
+[vars]
+OIDC_ISSUER_URL = "https://login.microsoftonline.com/your-tenant-id/v2.0"
+OIDC_CLIENT_ID = "your-application-client-id"
+OIDC_TOKEN_AUTH_METHOD = "client_secret_post"
+OIDC_SCOPES = "openid profile email"
+OIDC_ALLOWED_DOMAINS = "example.com"
+```
+
+#### Okta example
+
+1. In the Okta Admin Console, go to **Applications > Applications > Create App Integration**.
+2. Select **OIDC - OpenID Connect** and **Web Application**. Authorization Code is the required grant for this application type.
+3. Add `https://your-dashboard.example.com/auth/callback` as a **Sign-in redirect URI** and `https://your-dashboard.example.com/auth/signed-out` as a **Sign-out redirect URI**.
+4. Copy the Client ID and Client Secret from the application's **General** tab, then store the secret with Wrangler.
+5. Copy the exact Issuer URI from **Security > API**. The example below uses the `default` custom authorization server; ensure it has an access policy. For basic organization SSO, the organization authorization server issuer can also be used.
+
+Okta's [redirect authentication guide](https://developer.okta.com/docs/guides/redirect-authentication/) covers the Web Application integration, redirect URIs, credentials, and issuer location. Its [authorization server reference](https://developer.okta.com/docs/concepts/auth-servers/) explains organization and custom issuer URLs.
+
+```toml
+[vars]
+OIDC_ISSUER_URL = "https://your-org.okta.com/oauth2/default"
+OIDC_CLIENT_ID = "your-okta-client-id"
+OIDC_TOKEN_AUTH_METHOD = "client_secret_basic"
+OIDC_SCOPES = "openid profile email"
+OIDC_ALLOWED_DOMAINS = "example.com"
+```
+
+#### Verification and troubleshooting
+
+- Open `OIDC_ISSUER_URL + /.well-known/openid-configuration` and confirm that it returns JSON with authorization, token, JWKS, and issuer values.
+- A callback mismatch means the provider does not contain the exact `/auth/callback` URL, including scheme and hostname.
+- An `invalid_client` response usually means the client ID, secret, or `OIDC_TOKEN_AUTH_METHOD` does not match the provider application.
+- An access-denied response after successful provider login usually means the email claim is absent or does not match `OIDC_ALLOWED_EMAILS` / `OIDC_ALLOWED_DOMAINS`.
+- Keep `openid` in the scopes. Add `profile` and `email` so the audit log can identify the actor by name and email.
+
 ### OIDC settings
 
 | Variable | Required | Purpose |
@@ -154,16 +319,45 @@ Worker environment variables take priority over KV-backed OIDC settings. `OIDC_C
 
 When both allowlists are omitted, every identity authenticated by the configured provider is accepted. Configure at least one allowlist for a personal deployment.
 
-Then migrate, build, and deploy:
+After the Cloudflare resource IDs and optional OIDC values are configured, deploy in one command:
 
 ```sh
-npm run db:migrate:remote
-npm run build
-npx wrangler deploy
+npm run deploy
 ```
+
+The deploy script checks for unresolved resource placeholders, builds the Worker, applies pending remote D1 migrations, and deploys the generated Cloudflare Worker bundle. It stops on the first failure.
 
 > [!CAUTION]
 > Test the provider callback and allowlist before sharing the Worker URL. Bookmarklets and imported URLs should still be treated as trusted personal data.
+
+## Browser Extension
+
+The included Chromium Manifest V3 extension adds the current HTTP(S) tab to Okini with one toolbar click. It works with Chrome, Edge, and other Chromium browsers that support unpacked Manifest V3 extensions. The extension sends the tab title, URL, favicon, optional default tags, and favorite setting directly to a dedicated token-authenticated endpoint; it does not depend on the OIDC browser session.
+
+Create a dedicated random token and store it as a Cloudflare Worker secret:
+
+```sh
+openssl rand -hex 32
+npx wrangler secret put EXTENSION_API_TOKEN
+```
+
+Enter the same generated value when Wrangler prompts, then deploy the dashboard. To install the extension:
+
+1. Open `chrome://extensions` or `edge://extensions`.
+2. Enable **Developer mode**.
+3. Choose **Load unpacked** and select the [`browser-extension`](browser-extension) directory.
+4. In the settings page, enter the deployed dashboard URL and matching API token.
+5. Select **Connection test**, then pin **Okini Quick Add** to the toolbar.
+
+Clicking the toolbar icon immediately saves the active tab. A green check indicates success; a red exclamation mark indicates an invalid page, configuration, token, or API response. Default tags that do not exist are created automatically. The extension requests access only to the configured dashboard origin. The token stays in `chrome.storage.local`, but it should still be rotated if the browser profile or device is no longer trusted.
+
+For local testing, create an uncommitted `.dev.vars` file before `npm run preview`:
+
+```dotenv
+EXTENSION_API_TOKEN="replace-with-a-random-token"
+```
+
+Set the extension dashboard URL to `http://localhost:8787`. The extension endpoint accepts at most 60 additions per minute per client and only accepts HTTP(S) page URLs.
 
 ## Local Development
 
@@ -318,13 +512,13 @@ container run \
 
 When D1 has no bookmarks and no search or filter is active, the workspace presents an **Import** button that opens the same import modal used from the header menu.
 
-The importer accepts Chrome `.html` or `.htm` exports up to 10 MiB. UTF-8, Shift_JIS (including Windows-31J), EUC-JP, and ISO-2022-JP input is detected and converted to Unicode before it is sent as UTF-8 JSON. URL metadata and structured preview responses use the same conversion boundary. The importer closes the **Import** modal after file selection, streams completed/total counts and percentage to a progress bar, imports metadata with bounded concurrency, and reloads after success.
+The importer accepts up to 20 Chrome `.html` or `.htm` exports by file picker or drag and drop. Each file can be up to 10 MiB, with a combined limit of 50 MiB. UTF-8, Shift_JIS (including Windows-31J), EUC-JP, and ISO-2022-JP input is detected and converted to Unicode before it is sent as UTF-8 JSON. URL metadata and structured preview responses use the same conversion boundary. The importer closes the **Import** modal after selection, processes files in order, streams combined completed/total counts and percentage to a progress bar, imports metadata with bounded concurrency, and reloads after success.
 
 The parser excludes Chrome's synthetic root folder named `ブックマーク バー` or `Bookmarks bar`. Imported folders become tags, including nested folder names. The **Append to existing links** option adds another bookmark export without clearing current links; turning it off replaces the current data after confirmation. HTTP(S) bookmarks receive metadata enrichment, including `http://` URLs. `javascript:` and `data:` bookmarklets are retained but are not sent to the metadata or preview fetchers.
 
 ## Export Behavior
 
-Choose **Menu > Export** to download a Netscape/Chrome-compatible bookmark HTML file. Tags are exported as folders so browsers can import the file; bookmarks with multiple tags appear under each matching exported folder. Okini-specific VPN-required state is preserved with a custom `VPN_REQUIRED="1"` attribute, which browsers ignore during ordinary imports.
+Choose **Menu > Export** to download a Netscape/Chrome-compatible bookmark HTML file. Tags are exported as folders so browsers can import the file; bookmarks with multiple tags appear under each matching exported folder. **VPN Required** is exported like every other tag.
 
 Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standard ports. Private/local address ranges, application-origin URLs, credential-bearing URLs, and redirects that leave the public boundary are rejected. Redirects are capped, response bodies are bounded, and remote requests use `no-store` caching.
 
@@ -332,7 +526,7 @@ The exported document intentionally uses the legacy Netscape bookmark exchange m
 
 ## Reset Behavior
 > [!CAUTION]
-> Full reset deletes bookmarks, tags, and bookmark/tag relationships. It does not delete UI preferences. This operation cannot be undone.
+> Full reset deletes bookmarks, tags, and bookmark/tag relationships. It does not delete UI preferences or the audit log, so the reset itself and its record counts remain visible. Bookmark data cannot be restored from the audit log.
 
 ## Scripts
 
@@ -341,6 +535,7 @@ The exported document intentionally uses the legacy Netscape bookmark exchange m
 | `npm run dev` | Start Astro's development server |
 | `npm run preview` | Run the built Worker with Wrangler |
 | `npm run build` | Run `astro check` and create the production Worker build |
+| `npm run deploy` | Validate Cloudflare IDs, build, migrate remote D1, and deploy |
 | `npm run rebuild:local` | Build and apply local D1 migrations |
 | `npm run db:migrate:local` | Apply D1 migrations to the local database |
 | `npm run db:migrate:remote` | Apply D1 migrations to the remote database |
@@ -355,18 +550,21 @@ The exported document intentionally uses the legacy Netscape bookmark exchange m
 
 ## Features
 
-- Import UTF-8 and legacy Japanese Chrome bookmark HTML exports with progress feedback and automatic reload
+- Import up to 20 UTF-8 or legacy Japanese Chrome bookmark HTML exports by file picker or drag and drop, with combined progress feedback and automatic reload
 - Fetch redirect-resolved URLs, titles, descriptions, and absolute favicon URLs, including relative SVG icon links, with legacy Japanese encoding support
 - Create, read, update, and delete bookmarks and tags
+- Keep the latest 1,000 bookmark, tag, import, reorder, and reset operations in a readable audit log
 - Import Chrome bookmark folders as tags
 - Search across title, URL, description, and notes
 - Search by tag name
-- Filter favorites independently of the selected tag
+- Combine tag, favorite, and text filters
+- Select multiple cards and add or remove a tag in one operation
+- Drag cards to reorder the unfiltered list
 - Add tags directly from the bookmark editor
 - Show tags on bookmark cards without making them filter controls
 - Toggle favorites from bookmark cards
 - Keep favorite bookmarks at the top of the current list
-- Mark links that require VPN and show a VPN badge on their cards
+- Treat **VPN Required** as a regular tag that can be searched and managed with other tags
 - Export bookmarks as Chrome-compatible HTML
 - Enable JSON/XML pretty view per bookmark
 - Highlight JSON/XML with `highlight.js` and make embedded HTTP(S) URLs actionable
@@ -380,6 +578,7 @@ The exported document intentionally uses the legacy Netscape bookmark exchange m
 - Optionally authenticate pages and APIs through a configurable OIDC provider
 - Restrict access to selected email addresses or email domains
 - End both the local application session and, when supported, the OIDC provider session
+- Add the active Chromium tab in one click with the included token-authenticated Manifest V3 extension
 
 ## Technology
 
@@ -404,7 +603,9 @@ The exported document intentionally uses the legacy Netscape bookmark exchange m
 - `public/theme-boot.js`: pre-render theme resolution and browser-color synchronization
 - `public/manifest.webmanifest`: installed-app identity and light/dark launch colors
 - `src/styles/global.css`: light/dark tokens and presentation colors
+- `browser-extension/`: Chromium Manifest V3 one-click add extension and local settings page
 - Worker variables and secrets: OIDC provider metadata, client credentials, allowlists, and session lifetime
+- `EXTENSION_API_TOKEN`: optional dedicated bearer token stored as a Worker secret for browser-extension access
 
 ## Architecture
 
@@ -415,6 +616,7 @@ src/
 ├── components/              Astro UI structure
 ├── config/                  Identity, metadata, and preference defaults
 ├── domain/auth.ts           Authenticated-user and OIDC transaction contracts
+├── domain/audit.ts          Audit action and record contracts
 ├── domain/bookmarks.ts      Shared bookmark domain contracts
 ├── i18n/messages.ts         Japanese and English copy
 ├── lib/
@@ -438,7 +640,7 @@ src/
 
 ### Responsibility Boundaries
 
-- D1 stores bookmarks, tags, bookmark/tag relationships, and a legacy folder table retained for compatibility. Schema changes happen only through versioned migrations.
+- D1 stores bookmarks, tags, bookmark/tag relationships, the bounded audit log, and a legacy folder table retained for compatibility. Schema changes happen only through versioned migrations.
 - `PREFERENCES` KV stores locale, color-mode, OGP metadata, and non-secret OIDC settings. It does not store bookmark records, visual color values, or OIDC client secrets.
 - `SESSION` KV stores OIDC transactions, authenticated-user sessions, and the ID token used for provider logout.
 - OIDC client secrets are Worker secrets, never D1 or KV domain records. Environment variables override matching KV-backed OIDC policy settings.
@@ -451,9 +653,10 @@ src/
 
 | Table | Responsibility |
 | --- | --- |
-| `bookmarks` | URL, title, description, notes, favicon URL, favorite flag, VPN-required flag, and structured-preview flag |
+| `bookmarks` | URL, title, description, notes, favicon URL, favorite flag, and structured-preview flag |
 | `tags` | Unique tag names |
 | `bookmark_tags` | Many-to-many bookmark/tag relationships |
+| `audit_logs` | Latest 1,000 write operations with actor, action, target, summary, and timestamp |
 
 The archive field is not part of the current schema. Theme colors are controlled by CSS variables.
 
@@ -463,6 +666,10 @@ The archive field is not part of the current schema. Theme colors are controlled
 | --- | --- | --- |
 | `/api/bookmarks` | `GET`, `POST` | Filter/list and create bookmarks |
 | `/api/bookmarks/:id` | `GET`, `PATCH`, `DELETE` | Read, update, and delete one bookmark |
+| `/api/bookmarks/reorder` | `PATCH` | Persist drag-and-drop bookmark order |
+| `/api/bookmarks/bulk` | `PATCH` | Add or remove tags for multiple bookmarks |
+| `/api/audit-logs` | `GET` | Read the latest authenticated operation records |
+| `/api/extension/bookmarks` | `GET`, `POST` | Verify the extension token and add the current browser tab |
 | `/api/tags` | `GET`, `POST` | List and create tags |
 | `/api/tags/:id` | `PATCH`, `DELETE` | Update and delete a tag |
 | `/api/metadata` | `POST` | Resolve an HTTP(S) URL and fetch metadata |
@@ -473,7 +680,7 @@ The archive field is not part of the current schema. Theme colors are controlled
 | `/api/settings` | `GET`, `PATCH` | Read and update KV-backed app metadata and non-secret OIDC settings |
 | `/api/reset` | `DELETE` | Delete all D1 domain records |
 
-JSON responses use `no-store` and `nosniff` headers. Runtime validation rejects malformed input before repository operations. Deployed responses also set CSP, clickjacking, referrer, cross-origin, HSTS, and cache-control headers; static assets use explicit immutable or revalidation-friendly cache rules.
+JSON responses use `no-store` and `nosniff` headers. Runtime validation rejects malformed input before repository operations. Metadata requests are limited to 30 per minute per client and imports to 8 per five minutes per client; rate limits return `429` with `Retry-After`. Deployed responses also set CSP, clickjacking, referrer, cross-origin, HSTS, and cache-control headers; static assets use explicit immutable or revalidation-friendly cache rules.
 When OIDC is configured, every API endpoint requires an authenticated session and returns `401` instead of redirecting an unauthenticated API request. When OIDC is not configured, APIs remain available without a login session.
 
 ## Contributing
