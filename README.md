@@ -520,7 +520,7 @@ The parser excludes Chrome's synthetic root folder named `ブックマーク バ
 
 Choose **Menu > Export** to download a Netscape/Chrome-compatible bookmark HTML file. Tags are exported as folders so browsers can import the file; bookmarks with multiple tags appear under each matching exported folder. **VPN Required** is exported like every other tag.
 
-Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standard ports. Private/local address ranges, application-origin URLs, credential-bearing URLs, and redirects that leave the public boundary are rejected. Redirects are capped, response bodies are bounded, and remote requests use `no-store` caching.
+Metadata, favicon, and preview requests only fetch public HTTP(S) URLs on standard ports. Private/local address ranges, application-origin URLs, credential-bearing URLs, and redirects that leave the public boundary are rejected. Credential-bearing HTTP(S) URLs are still allowed as bookmark destinations and can be opened directly, but the dashboard never sends their embedded credentials through its server-side fetchers. Redirects are capped, response bodies are bounded, and remote requests use `no-store` caching.
 
 The exported document intentionally uses the legacy Netscape bookmark exchange markup required by browser importers. It is a compatibility file, not application page markup.
 

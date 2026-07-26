@@ -1,11 +1,11 @@
 import type { Bookmark, BookmarkInput, Tag } from "../domain/bookmarks";
 import type { AuditAction, AuditLog } from "../domain/audit";
-import type { ColorMode } from "../config/preferences";
+import type { ColorMode, ViewMode } from "../config/preferences";
 import type { Locale, MessageKey } from "../i18n/messages";
 import { readTextBlob, UnsupportedTextEncodingError } from "../lib/text-encoding";
 import { ApiClientError, requestJson, requestJsonLines } from "./lib/api-client";
 import { byId, formControl } from "./lib/dom";
-import { escapeAttribute, escapeHtml, faviconHtml, faviconMarkup, isHttpBookmarkUrl, safeHost, setupFaviconFallbacks } from "./lib/format";
+import { escapeAttribute, escapeHtml, faviconHtml, faviconMarkup, hasUrlCredentials, isHttpBookmarkUrl, safeHost, setupFaviconFallbacks } from "./lib/format";
 import { I18nController } from "./lib/i18n-controller";
 import { formatStructuredText, renderHighlightedPreview } from "./lib/structured-preview";
 import { ThemeController } from "./lib/theme-controller";
@@ -37,6 +37,8 @@ const elements = {
   favoriteOnlyButton: byId<HTMLButtonElement>("favoriteOnly"),
   homeFilterButton: byId<HTMLButtonElement>("homeFilterButton"),
   newButton: byId<HTMLButtonElement>("newButton"),
+  cardsViewButton: byId<HTMLButtonElement>("cardsViewButton"),
+  listViewButton: byId<HTMLButtonElement>("listViewButton"),
   moveToTopButton: byId<HTMLButtonElement>("moveToTopButton"),
   bulkActions: byId<HTMLElement>("bulkActions"),
   bulkSelectionCount: byId<HTMLOutputElement>("bulkSelectionCount"),
@@ -110,6 +112,7 @@ const elements = {
 const i18n = new I18nController();
 const t = (key: MessageKey, vars: Record<string, string | number> = {}) => i18n.t(key, vars);
 const theme = new ThemeController(elements.themeButton, t);
+let viewMode: ViewMode = document.documentElement.dataset.viewMode === "list" ? "list" : "cards";
 let pendingPreviewUrl = "";
 let refreshSequence = 0;
 let searchTimer = 0;
@@ -127,6 +130,7 @@ let previewSearchIndex = -1;
 let previewSearchComposing = false;
 let previewSearchCompositionTimer = 0;
 let draggedBookmarkId = "";
+let reorderBusy = false;
 let importDragDepth = 0;
 
 const metadataFetchDelayMs = 5_000;
@@ -141,7 +145,7 @@ const faviconImageTypes = new Set([
   "image/x-icon"
 ]);
 
-async function savePreferences(input: Partial<{ locale: Locale; colorMode: ColorMode }>) {
+async function savePreferences(input: Partial<{ locale: Locale; colorMode: ColorMode; viewMode: ViewMode }>) {
   const request = preferenceSaveQueue.then(() =>
     requestJson("/api/preferences", { method: "PATCH", body: JSON.stringify(input) })
   );
@@ -169,6 +173,15 @@ async function cycleColorMode() {
   const colorMode = theme.next();
   theme.apply(colorMode);
   await savePreferences({ colorMode });
+}
+
+async function setViewMode(next: ViewMode) {
+  if (viewMode === next) return;
+  viewMode = next;
+  document.documentElement.dataset.viewMode = viewMode;
+  renderViewMode();
+  renderBookmarks();
+  await savePreferences({ viewMode });
 }
 
 function syncOpenDialogLocale() {
@@ -208,10 +221,20 @@ async function refresh() {
 function render() {
   renderTagFilter();
   renderFavoriteFilter();
+  renderViewMode();
   renderBulkActions();
   renderManager();
   renderBookmarks();
   renderEditorTags();
+}
+
+function renderViewMode() {
+  const isList = viewMode === "list";
+  elements.cardsViewButton.classList.toggle("is-active", !isList);
+  elements.cardsViewButton.setAttribute("aria-pressed", String(!isList));
+  elements.listViewButton.classList.toggle("is-active", isList);
+  elements.listViewButton.setAttribute("aria-pressed", String(isList));
+  elements.bookmarkList.classList.toggle("is-list-view", isList);
 }
 
 function renderTagFilter() {
@@ -348,15 +371,17 @@ function renderBookmarks() {
     return;
   }
 
-  const bookmarks = [...state.bookmarks].sort((a, b) => Number(b.favorite) - Number(a.favorite));
+  const bookmarks = state.bookmarks;
   elements.bookmarkList.innerHTML = bookmarks
-    .map((bookmark) => {
+    .map((bookmark, index) => {
       const isOpenable = isHttpBookmarkUrl(bookmark.url);
       const previewAction =
-        bookmark.structuredPreviewEnabled && isOpenable
+        bookmark.structuredPreviewEnabled && isOpenable && !hasUrlCredentials(bookmark.url)
           ? `<button type="button" class="ghost-link preview-link" data-preview="${escapeAttribute(bookmark.id)}">${escapeHtml(t("structuredPreview"))}</button>`
           : "";
-      const tags = bookmark.tags.map((tag) => `<span class="card-tag">${escapeHtml(tag.name)}</span>`).join("");
+      const tags = bookmark.tags
+        .map((tag) => `<span class="card-tag${tag.name === "VPN Required" ? " vpn-required-tag" : ""}">${escapeHtml(tag.name)}</span>`)
+        .join("");
       const main = isOpenable
         ? `<a class="card-main-link" href="${escapeAttribute(bookmark.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="${escapeAttribute(t("openLinkLabel", { title: bookmark.title }))}">
           ${faviconHtml(bookmark)}
@@ -373,6 +398,12 @@ function renderBookmarks() {
           </div>
         </div>`;
       const selected = state.selectedBookmarkIds.has(bookmark.id);
+      const orderActions = !hasActiveFilters
+        ? `<div class="card-order-actions" aria-label="${escapeAttribute(t("bookmarks"))}">
+            <button type="button" class="card-order-button" data-move-up="${escapeAttribute(bookmark.id)}"${index === 0 ? " disabled" : ""} aria-label="${escapeAttribute(t("moveUp"))}" title="${escapeAttribute(t("moveUp"))}">↑</button>
+            <button type="button" class="card-order-button" data-move-down="${escapeAttribute(bookmark.id)}"${index === bookmarks.length - 1 ? " disabled" : ""} aria-label="${escapeAttribute(t("moveDown"))}" title="${escapeAttribute(t("moveDown"))}">↓</button>
+          </div>`
+        : "";
       return `<article class="bookmark-card${selected ? " is-selected" : ""}" data-bookmark-id="${escapeAttribute(bookmark.id)}"${hasActiveFilters ? "" : " draggable=\"true\""}>
         <input class="bookmark-select" type="checkbox" data-select-bookmark="${escapeAttribute(bookmark.id)}"${selected ? " checked" : ""} aria-label="${escapeAttribute(t("selectBookmark", { title: bookmark.title }))}" />
         <div class="card-main">
@@ -386,6 +417,7 @@ function renderBookmarks() {
             <button type="button" class="ghost-link" data-details="${escapeAttribute(bookmark.id)}">${escapeHtml(t("descriptionNotes"))}</button>
             <button type="button" class="favorite-toggle${bookmark.favorite ? " is-active" : ""}" data-favorite="${escapeAttribute(bookmark.id)}" aria-label="${escapeAttribute(t(bookmark.favorite ? "removeFavorite" : "addFavorite"))}" title="${escapeAttribute(t(bookmark.favorite ? "removeFavorite" : "addFavorite"))}">${bookmark.favorite ? "★" : "☆"}</button>
           </div>
+          ${orderActions}
         </div>
       </article>`;
     })
@@ -456,6 +488,10 @@ async function fillMetadata(force = false) {
   const url = urlInput.value.trim();
   if (!url) return;
   if (!force && lastMetadataUrl === url) return;
+  if (hasUrlCredentials(url)) {
+    setMetadataStatus(t("metadataUnavailableForCredentials"));
+    return;
+  }
 
   metadataController?.abort();
   metadataController = new AbortController();
@@ -880,6 +916,27 @@ async function toggleFavorite(id: string) {
   await refresh();
 }
 
+async function moveBookmark(id: string, direction: "up" | "down") {
+  if (reorderBusy || state.query || state.tagId || state.favoriteOnly) return;
+  const cards = Array.from(elements.bookmarkList.querySelectorAll<HTMLElement>("[data-bookmark-id]"));
+  const currentIndex = cards.findIndex((card) => card.dataset.bookmarkId === id);
+  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= cards.length) return;
+
+  const currentCard = cards[currentIndex];
+  const targetCard = cards[targetIndex];
+  if (!currentCard || !targetCard) return;
+  if (direction === "up") targetCard.parentElement?.insertBefore(currentCard, targetCard);
+  else targetCard.parentElement?.insertBefore(targetCard, currentCard);
+
+  reorderBusy = true;
+  try {
+    await persistDraggedOrder();
+  } finally {
+    reorderBusy = false;
+  }
+}
+
 async function bulkUpdateTags(operation: "add" | "remove") {
   const tagId = elements.bulkTagSelect.value;
   const bookmarkIds = [...state.selectedBookmarkIds];
@@ -913,6 +970,16 @@ function handleBookmarkListClick(event: MouseEvent) {
   const target = event.target as Element;
   if (target.closest<HTMLButtonElement>("[data-open-import]")) {
     elements.importManager.showModal();
+    return;
+  }
+  const moveUpButton = target.closest<HTMLButtonElement>("[data-move-up]");
+  if (moveUpButton) {
+    moveBookmark(moveUpButton.dataset.moveUp ?? "", "up").catch(showError);
+    return;
+  }
+  const moveDownButton = target.closest<HTMLButtonElement>("[data-move-down]");
+  if (moveDownButton) {
+    moveBookmark(moveDownButton.dataset.moveDown ?? "", "down").catch(showError);
     return;
   }
   const editButton = target.closest<HTMLButtonElement>("[data-edit]");
@@ -951,6 +1018,8 @@ elements.workspace.addEventListener("scroll", () => {
 });
 elements.homeFilterButton.addEventListener("click", () => resetFilters().catch(showError));
 elements.bookmarkList.addEventListener("click", handleBookmarkListClick);
+elements.cardsViewButton.addEventListener("click", () => setViewMode("cards").catch(showError));
+elements.listViewButton.addEventListener("click", () => setViewMode("list").catch(showError));
 elements.bookmarkList.addEventListener("change", (event) => {
   const input = (event.target as Element).closest<HTMLInputElement>("[data-select-bookmark]");
   if (!input) return;
@@ -1053,6 +1122,10 @@ formControl<HTMLInputElement>(elements.form, "url").addEventListener("input", (e
   updateMetadataButton(false);
   if (!url) {
     setMetadataStatus(t("metadataIdle"));
+    return;
+  }
+  if (hasUrlCredentials(url)) {
+    setMetadataStatus(t("metadataUnavailableForCredentials"));
     return;
   }
   setMetadataStatus(t("metadataReady"));

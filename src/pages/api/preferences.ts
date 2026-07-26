@@ -1,12 +1,13 @@
 import type { APIRoute } from "astro";
 import { getKv } from "../../lib/kv";
 import { readPreferences, writePreferences } from "../../lib/preferences";
-import { isColorMode, isLocale } from "../../config/preferences";
+import { isColorMode, isLocale, isViewMode } from "../../config/preferences";
 import { ApiError, apiRoute, json, readJson } from "../../lib/http";
 
 type Payload = {
   locale?: unknown;
   colorMode?: unknown;
+  viewMode?: unknown;
 };
 
 export const GET: APIRoute = apiRoute(async ({ locals }) => {
@@ -21,6 +22,9 @@ export const PATCH: APIRoute = apiRoute(async ({ locals, request }) => {
   }
   if (body.colorMode !== undefined && !isColorMode(body.colorMode)) {
     throw new ApiError("Unsupported color mode", 422, "validation_error");
+  }
+  if (body.viewMode !== undefined && !isViewMode(body.viewMode)) {
+    throw new ApiError("Unsupported view mode", 422, "validation_error");
   }
   const preferences = await writePreferences(getKv(locals), body);
   return json({ preferences });

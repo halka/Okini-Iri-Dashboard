@@ -34,6 +34,14 @@ const { t } = Astro.props;
     </div>
     <div class="primary-actions">
       <button id="newButton" type="button" class="primary" data-i18n="newLink">{t.newLink}</button>
+      <div id="viewModeToggle" class="view-mode-toggle" role="group" aria-label={t.viewMode} data-i18n-aria-label="viewMode">
+        <button id="cardsViewButton" type="button" class="view-mode-button" aria-pressed="true" aria-label={t.cardView} title={t.cardView} data-i18n-aria-label="cardView" data-i18n-title="cardView">
+          <span aria-hidden="true">▦</span><span data-i18n="cardView">{t.cardView}</span>
+        </button>
+        <button id="listViewButton" type="button" class="view-mode-button" aria-pressed="false" aria-label={t.listView} title={t.listView} data-i18n-aria-label="listView" data-i18n-title="listView">
+          <span aria-hidden="true">☷</span><span data-i18n="listView">{t.listView}</span>
+        </button>
+      </div>
     </div>
     <div class="header-tools">
       <button

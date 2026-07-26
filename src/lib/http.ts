@@ -1,6 +1,8 @@
 import type { APIRoute } from "astro";
 import { normalizeUtf8Text } from "./text-encoding";
 
+export { isSupportedBookmarkUrl } from "./bookmark-url";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -87,16 +89,6 @@ export function apiRoute(handler: APIRoute): APIRoute {
       return json({ error: "Internal server error", code: "internal_error" }, 500);
     }
   };
-}
-
-export function isSupportedBookmarkUrl(url: string) {
-  if (!url.trim() || url.length > 65_536 || /[\u0000-\u001f\u007f]/.test(url)) return false;
-  try {
-    const parsed = new URL(url);
-    return ["http:", "https:", "javascript:", "data:"].includes(parsed.protocol) && !parsed.username && !parsed.password;
-  } catch {
-    return false;
-  }
 }
 
 export function isHttpUrl(url: string) {

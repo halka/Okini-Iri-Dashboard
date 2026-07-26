@@ -12,6 +12,24 @@ export function safeHost(url: string) {
 export function isHttpBookmarkUrl(url: string) {
   try {
     const parsed = new URL(url);
+    return ["http:", "https:"].includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
+export function hasUrlCredentials(url: string) {
+  try {
+    const parsed = new URL(url);
+    return Boolean(parsed.username || parsed.password);
+  } catch {
+    return false;
+  }
+}
+
+function isSafeHttpResourceUrl(url: string) {
+  try {
+    const parsed = new URL(url);
     return ["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password;
   } catch {
     return false;
@@ -37,7 +55,7 @@ export function faviconMarkup(faviconUrl: string, title: string) {
 }
 
 function isFaviconImageSource(value: string) {
-  if (isHttpBookmarkUrl(value)) return true;
+  if (isSafeHttpResourceUrl(value)) return true;
   return /^data:image\/(?:png|jpe?g|gif|webp|svg\+xml|x-icon|vnd\.microsoft\.icon);base64,[a-z0-9+/]+=*$/i.test(value);
 }
 

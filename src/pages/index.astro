@@ -22,6 +22,7 @@ if (!user) throw new Error("Authenticated user is unavailable");
   data-locale={preferences.locale}
   data-theme-preference={preferences.colorMode}
   data-color-mode={preferences.colorMode === "dark" ? "dark" : "light"}
+  data-view-mode={preferences.viewMode}
 >
   <AppHead t={t} preferences={preferences} />
   <body>

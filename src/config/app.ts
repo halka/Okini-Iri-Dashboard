@@ -1,5 +1,5 @@
 export const appConfig = {
-  displayName: "Okini",
+  displayName: "SHIORI",
   brandName: "Bookmark",
   brandProduct: "Dashboard",
   siteUrl: "https://b.halka.ee/",
