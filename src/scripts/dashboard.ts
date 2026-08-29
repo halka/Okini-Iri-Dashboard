@@ -34,6 +34,7 @@ const elements = {
   workspace: byId<HTMLElement>("workspace"),
   tagSelect: byId<HTMLSelectElement>("tagSelect"),
   searchInput: byId<HTMLInputElement>("searchInput"),
+  clearSearchButton: byId<HTMLButtonElement>("clearSearchButton"),
   favoriteOnlyButton: byId<HTMLButtonElement>("favoriteOnly"),
   homeFilterButton: byId<HTMLButtonElement>("homeFilterButton"),
   newButton: byId<HTMLButtonElement>("newButton"),
@@ -290,6 +291,7 @@ async function resetFilters() {
   state.selectedBookmarkIds.clear();
   elements.tagSelect.value = "";
   elements.searchInput.value = "";
+  elements.clearSearchButton.hidden = true;
   renderFavoriteFilter();
   await refresh();
   requestAnimationFrame(scrollWorkspaceToTop);
@@ -398,12 +400,10 @@ function renderBookmarks() {
           </div>
         </div>`;
       const selected = state.selectedBookmarkIds.has(bookmark.id);
-      const orderActions = !hasActiveFilters
-        ? `<div class="card-order-actions" aria-label="${escapeAttribute(t("bookmarks"))}">
+      const orderActions = `<div class="card-order-actions" aria-label="${escapeAttribute(t("bookmarks"))}">
             <button type="button" class="card-order-button" data-move-up="${escapeAttribute(bookmark.id)}"${index === 0 ? " disabled" : ""} aria-label="${escapeAttribute(t("moveUp"))}" title="${escapeAttribute(t("moveUp"))}">↑</button>
             <button type="button" class="card-order-button" data-move-down="${escapeAttribute(bookmark.id)}"${index === bookmarks.length - 1 ? " disabled" : ""} aria-label="${escapeAttribute(t("moveDown"))}" title="${escapeAttribute(t("moveDown"))}">↓</button>
-          </div>`
-        : "";
+          </div>`;
       return `<article class="bookmark-card${selected ? " is-selected" : ""}" data-bookmark-id="${escapeAttribute(bookmark.id)}"${hasActiveFilters ? "" : " draggable=\"true\""}>
         <input class="bookmark-select" type="checkbox" data-select-bookmark="${escapeAttribute(bookmark.id)}"${selected ? " checked" : ""} aria-label="${escapeAttribute(t("selectBookmark", { title: bookmark.title }))}" />
         <div class="card-main">
@@ -917,7 +917,7 @@ async function toggleFavorite(id: string) {
 }
 
 async function moveBookmark(id: string, direction: "up" | "down") {
-  if (reorderBusy || state.query || state.tagId || state.favoriteOnly) return;
+  if (reorderBusy) return;
   const cards = Array.from(elements.bookmarkList.querySelectorAll<HTMLElement>("[data-bookmark-id]"));
   const currentIndex = cards.findIndex((card) => card.dataset.bookmarkId === id);
   const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
@@ -950,8 +950,15 @@ async function bulkUpdateTags(operation: "add" | "remove") {
 }
 
 async function persistDraggedOrder() {
-  const ids = Array.from(elements.bookmarkList.querySelectorAll<HTMLElement>("[data-bookmark-id]"), (card) => card.dataset.bookmarkId ?? "").filter(Boolean);
-  if (!ids.length) return;
+  const visibleIds = Array.from(elements.bookmarkList.querySelectorAll<HTMLElement>("[data-bookmark-id]"), (card) => card.dataset.bookmarkId ?? "").filter(Boolean);
+  if (!visibleIds.length) return;
+  let ids = visibleIds;
+  if (state.query || state.tagId || state.favoriteOnly) {
+    const { bookmarks } = await requestJson<{ bookmarks: Bookmark[] }>("/api/bookmarks");
+    const visibleIdSet = new Set(visibleIds);
+    let visibleIndex = 0;
+    ids = bookmarks.map((bookmark) => (visibleIdSet.has(bookmark.id) ? visibleIds[visibleIndex++] ?? bookmark.id : bookmark.id));
+  }
   await requestJson("/api/bookmarks/reorder", {
     method: "PATCH",
     body: JSON.stringify({ ids })
@@ -1200,8 +1207,17 @@ elements.tagSelect.addEventListener("change", () => {
 });
 elements.searchInput.addEventListener("input", () => {
   state.query = elements.searchInput.value.trim();
+  elements.clearSearchButton.hidden = !elements.searchInput.value;
   window.clearTimeout(searchTimer);
   searchTimer = window.setTimeout(() => refresh().catch(showError), 220);
+});
+elements.clearSearchButton.addEventListener("click", () => {
+  elements.searchInput.value = "";
+  elements.clearSearchButton.hidden = true;
+  state.query = "";
+  window.clearTimeout(searchTimer);
+  refresh().catch(showError);
+  elements.searchInput.focus();
 });
 elements.favoriteOnlyButton.addEventListener("click", () => {
   state.favoriteOnly = !state.favoriteOnly;

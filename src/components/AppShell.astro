@@ -23,6 +23,7 @@ const { t } = Astro.props;
       <label class="search">
         <span class="visually-hidden" data-i18n="search">{t.search}</span>
         <input id="searchInput" type="search" placeholder={t.searchPlaceholder} autocomplete="off" enterkeyhint="search" data-i18n-placeholder="searchPlaceholder" />
+        <button id="clearSearchButton" type="button" class="clear-search-button" aria-label={t.clearSearch} title={t.clearSearch} data-i18n-aria-label="clearSearch" data-i18n-title="clearSearch" hidden>×</button>
       </label>
       <label class="select-filter">
         <span class="visually-hidden" data-i18n="tags">{t.tags}</span>
