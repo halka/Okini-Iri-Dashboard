@@ -32,6 +32,7 @@ export async function fetchPublicUrl(input: string | URL, init: RequestInit = {}
       redirect: "manual"
     });
     if (!redirectStatuses.has(response.status)) return response;
+    await response.body?.cancel();
     if (redirect >= maxRedirects) throw new UnsafeRemoteUrlError("Too many redirects");
 
     const location = response.headers.get("location");

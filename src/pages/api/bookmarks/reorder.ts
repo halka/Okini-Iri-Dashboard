@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { maxBookmarkOperationBytes, maxBookmarkOperationItems } from "../../../config/bookmark-limits";
 import { reorderBookmarks } from "../../../lib/repositories/bookmarks";
 import { recordAuditLogSafely } from "../../../lib/repositories/audit";
 import { getDb } from "../../../lib/d1";
@@ -7,8 +8,8 @@ import { ApiError, apiRoute, json, optionalStringArray, readJson } from "../../.
 type Payload = { ids?: string[] };
 
 export const PATCH: APIRoute = apiRoute(async ({ locals, request }) => {
-  const body = await readJson<Payload>(request);
-  const ids = optionalStringArray(body.ids, "ids", 500);
+  const body = await readJson<Payload>(request, maxBookmarkOperationBytes);
+  const ids = optionalStringArray(body.ids, "ids", maxBookmarkOperationItems);
   if (!ids?.length) throw new ApiError("At least one bookmark is required", 422, "validation_error");
   const db = getDb(locals);
   const updated = await reorderBookmarks(db, ids);

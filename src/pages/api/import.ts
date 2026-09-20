@@ -90,6 +90,7 @@ export const POST: APIRoute = apiRoute(async ({ locals, request }) => {
           result.tags += imported.tags;
           result.folders += imported.folders ?? imported.tags;
           result.bookmarks += imported.bookmarks;
+          if (imported.skipped) break;
         }
         sendProgress({ completed: totalBookmarks, total: totalBookmarks });
         await recordAuditLogSafely(db, user, {

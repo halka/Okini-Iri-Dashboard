@@ -39,7 +39,7 @@ function secure(response: Response, pathname: string, request: Request) {
   if (!isLoopbackRequest(request)) {
     headers.set(
       "content-security-policy",
-      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https:; connect-src 'self'; " +
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; " +
         "font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; " +
         "script-src-attr 'none'"
     );

@@ -1,5 +1,6 @@
 import type { Bookmark, BookmarkFilters, BookmarkInput, BookmarkPatch } from "../../domain/bookmarks";
 import { mapBookmark, type D1Row } from "./mappers";
+import { bookmarkPageSize } from "../../config/bookmark-limits";
 
 const bookmarkSelect = `
   SELECT b.id, b.title, b.url, b.folder_id, f.name AS folder_name, b.description, b.notes,
@@ -16,7 +17,7 @@ const bookmarkSelect = `
   LEFT JOIN tags t ON t.id = bt.tag_id AND lower(t.name) NOT IN ('untagged')
 `;
 
-export async function listBookmarks(db: D1Database, filters: BookmarkFilters = {}): Promise<Bookmark[]> {
+export async function listBookmarks(db: D1Database, filters: BookmarkFilters = {}, offset = 0): Promise<Bookmark[]> {
   const where: string[] = [];
   const binds: unknown[] = [];
 
@@ -49,9 +50,9 @@ export async function listBookmarks(db: D1Database, filters: BookmarkFilters = {
     .prepare(`${bookmarkSelect}
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
       GROUP BY b.id
-      ORDER BY f.sort_order, b.sort_order, b.created_at
-      LIMIT 500`)
-    .bind(...binds)
+      ORDER BY b.sort_order, b.created_at, b.id
+      LIMIT ? OFFSET ?`)
+    .bind(...binds, bookmarkPageSize, offset)
     .all<D1Row>();
 
   return result.results.map(mapBookmark);
@@ -129,12 +130,14 @@ export async function deleteBookmark(db: D1Database, id: string) {
 }
 
 export async function reorderBookmarks(db: D1Database, ids: string[]) {
-  const statements = ids.map((id, sortOrder) =>
-    db
-      .prepare("UPDATE bookmarks SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-      .bind(sortOrder, id)
-  );
-  if (statements.length) await db.batch(statements);
+  if (ids.length) {
+    await db.prepare(`WITH ordering AS (
+      SELECT value AS id, CAST(key AS INTEGER) AS position FROM json_each(?)
+    )
+    UPDATE bookmarks SET sort_order = (SELECT position FROM ordering WHERE ordering.id = bookmarks.id),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id IN (SELECT id FROM ordering)`).bind(JSON.stringify(ids)).run();
+  }
   return ids.length;
 }
 
@@ -144,38 +147,36 @@ export async function bulkUpdateBookmarkTags(
   addTagIds: string[] = [],
   removeTagIds: string[] = []
 ) {
-  const bookmarkPlaceholders = bookmarkIds.map(() => "?").join(", ");
   const tagIds = [...new Set([...addTagIds, ...removeTagIds])];
-  const tagPlaceholders = tagIds.map(() => "?").join(", ");
   const validBookmarkRows = await db
-    .prepare(`SELECT id FROM bookmarks WHERE id IN (${bookmarkPlaceholders})`)
-    .bind(...bookmarkIds)
+    .prepare("SELECT id FROM bookmarks WHERE id IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify(bookmarkIds))
     .all<{ id: string }>();
   const validBookmarkIds = validBookmarkRows.results.map((row) => row.id);
   if (!validBookmarkIds.length || !tagIds.length) return { bookmarks: validBookmarkIds.length, tags: 0 };
 
   const validTagRows = await db
-    .prepare(`SELECT id FROM tags WHERE id IN (${tagPlaceholders}) AND lower(name) NOT IN ('untagged')`)
-    .bind(...tagIds)
+    .prepare("SELECT id FROM tags WHERE id IN (SELECT value FROM json_each(?)) AND lower(name) NOT IN ('untagged')")
+    .bind(JSON.stringify(tagIds))
     .all<{ id: string }>();
   const validTagIds = new Set(validTagRows.results.map((row) => row.id));
   const statements: D1PreparedStatement[] = [];
   const validAddTagIds = addTagIds.filter((id) => validTagIds.has(id));
   const validRemoveTagIds = removeTagIds.filter((id) => validTagIds.has(id));
 
-  for (const bookmarkId of validBookmarkIds) {
-    for (const tagId of validAddTagIds) {
-      statements.push(
-        db.prepare("INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)").bind(bookmarkId, tagId)
-      );
-    }
-    if (validRemoveTagIds.length) {
-      statements.push(
-        db
-          .prepare(`DELETE FROM bookmark_tags WHERE bookmark_id = ? AND tag_id IN (${validRemoveTagIds.map(() => "?").join(", ")})`)
-          .bind(bookmarkId, ...validRemoveTagIds)
-      );
-    }
+  if (validAddTagIds.length) {
+    statements.push(
+      db.prepare(`INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id)
+        SELECT bookmarks.value, tags.value FROM json_each(?) AS bookmarks CROSS JOIN json_each(?) AS tags`)
+        .bind(JSON.stringify(validBookmarkIds), JSON.stringify(validAddTagIds))
+    );
+  }
+  if (validRemoveTagIds.length) {
+    statements.push(
+      db.prepare(`DELETE FROM bookmark_tags
+        WHERE bookmark_id IN (SELECT value FROM json_each(?)) AND tag_id IN (SELECT value FROM json_each(?))`)
+        .bind(JSON.stringify(validBookmarkIds), JSON.stringify(validRemoveTagIds))
+    );
   }
   if (statements.length) await db.batch(statements);
   return { bookmarks: validBookmarkIds.length, tags: validTagIds.size };

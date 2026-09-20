@@ -1,6 +1,7 @@
 import { appConfig } from "../config/app";
 import { fetchPublicUrl, publicHttpUrl, type RemoteFetchOptions } from "./remote-fetch";
 import { readResponseText } from "./text-encoding";
+import { decodeHtml } from "./html-entities";
 
 export type UrlMetadata = {
   url: string;
@@ -45,6 +46,7 @@ export async function fetchUrlMetadata(inputUrl: string, options: RemoteFetchOpt
   const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
   const canContainHtml = !contentType || contentType.includes("html") || contentType.includes("text/plain");
   if (!response.ok || !canContainHtml) {
+    await response.body?.cancel();
     return { ...fallback, faviconUrl: await firstExistingIcon(defaultIconCandidates(finalUrl), options) };
   }
 
@@ -64,8 +66,9 @@ export async function fetchUrlMetadata(inputUrl: string, options: RemoteFetchOpt
 }
 
 async function urlExists(value: string, options: RemoteFetchOptions) {
+  let response: Response | undefined;
   try {
-    const response = await fetchPublicUrl(value, {
+    response = await fetchPublicUrl(value, {
       method: "GET",
       signal: AbortSignal.timeout(6_000),
       headers: {
@@ -79,6 +82,8 @@ async function urlExists(value: string, options: RemoteFetchOptions) {
     return hasImageSignature(await readResponsePrefix(response, 4_096));
   } catch {
     return false;
+  } finally {
+    if (response?.body && !response.body.locked) await response.body.cancel().catch(() => undefined);
   }
 }
 
@@ -118,7 +123,10 @@ async function findManifestIcons(html: string, documentBaseUrl: string, options:
           "user-agent": appConfig.userAgent
         }
       }, options);
-      if (!response.ok) continue;
+      if (!response.ok) {
+        await response.body?.cancel();
+        continue;
+      }
       const manifestUrl = normalizeResponseUrl(response.url, requestedUrl, options);
       const manifest = JSON.parse(stripBom((await readResponseText(response, auxiliaryDocumentLimit)).text)) as unknown;
       candidates.push(...manifestIconSources(manifest, manifestUrl.href, options));
@@ -180,7 +188,10 @@ async function findBrowserConfigIcons(
         "user-agent": appConfig.userAgent
       }
     }, options);
-    if (!response.ok) return [];
+    if (!response.ok) {
+      await response.body?.cancel();
+      return [];
+    }
     const configUrl = normalizeResponseUrl(response.url, requestedUrl, options);
     const xml = (await readResponseText(response, auxiliaryDocumentLimit)).text;
     return findBrowserConfigSources(xml)
@@ -359,16 +370,3 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function decodeHtml(value: string) {
-  return value
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
-    .replace(/\s+/g, " ")
-    .trim();
-}

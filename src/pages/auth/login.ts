@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
 import { AuthConfigurationError, readOidcConfig } from "../../lib/auth/config";
 import { authErrorUrl, redirectResponse, safeReturnTo } from "../../lib/auth/http";
-import { createAuthorizationRequest, optionalAuthenticationUser } from "../../lib/auth/oidc";
-import { authTransactionKey, authUserKey, oidcTransactionTtlSeconds, readAuthUser, requireSession } from "../../lib/auth/session";
+import { createAuthorizationRequest } from "../../lib/auth/oidc";
+import { authTransactionKey, oidcTransactionTtlSeconds, readAuthUser, requireSession } from "../../lib/auth/session";
 import { getKv } from "../../lib/kv";
 
 export const GET: APIRoute = async ({ locals, session, url }) => {
@@ -15,8 +15,6 @@ export const GET: APIRoute = async ({ locals, session, url }) => {
 
     const config = await readOidcConfig(getKv(locals));
     if (!config) {
-      await authSession.regenerate();
-      authSession.set(authUserKey, optionalAuthenticationUser());
       return redirectResponse(new URL(returnTo, url));
     }
 

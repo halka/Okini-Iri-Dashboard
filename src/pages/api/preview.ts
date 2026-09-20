@@ -26,6 +26,7 @@ export const POST: APIRoute = apiRoute(async ({ request }) => {
   }, { blockedOrigins: new Set([new URL(request.url).origin]) });
 
   if (!response.ok) {
+    await response.body?.cancel();
     throw new ApiError(`fetch failed: ${response.status}`, 422, "preview_fetch_failed");
   }
 

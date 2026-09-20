@@ -81,11 +81,15 @@ export async function readAppSettings(kv: KVNamespace): Promise<AppSettings> {
 export async function writeAppSettings(kv: KVNamespace, input: AppSettingsInput): Promise<AppSettings> {
   const current = await readAppSettings(kv);
   const settings = normalizeAppSettings({
-    site: { ...current.site, ...input.site },
-    oidc: { ...current.oidc, ...input.oidc }
+    site: { ...current.site, ...definedFields(input.site) },
+    oidc: { ...current.oidc, ...definedFields(input.oidc) }
   });
   await kv.put(settingsKey, JSON.stringify(settings));
   return settings;
+}
+
+function definedFields<T extends object>(input: T | undefined): Partial<T> {
+  return Object.fromEntries(Object.entries(input ?? {}).filter(([, value]) => value !== undefined)) as Partial<T>;
 }
 
 export function publicAppSettings(settings: AppSettings) {

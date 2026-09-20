@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { bookmarkPageSize } from "../../../config/bookmark-limits";
 import { createBookmark, listBookmarks } from "../../../lib/repositories/bookmarks";
 import { recordAuditLogSafely } from "../../../lib/repositories/audit";
 import { getDb } from "../../../lib/d1";
@@ -30,6 +31,8 @@ type Payload = {
 };
 
 export const GET: APIRoute = apiRoute(async ({ locals, url }) => {
+  const offset = Number(url.searchParams.get("offset") ?? "0");
+  if (!Number.isSafeInteger(offset) || offset < 0) throw new ApiError("offset is invalid", 422, "validation_error");
   const favoriteValue = queryText(url.searchParams.get("favorite"), "favorite");
   if (favoriteValue && favoriteValue !== "true" && favoriteValue !== "false") {
     throw new ApiError("favorite is invalid", 422, "validation_error");
@@ -38,8 +41,8 @@ export const GET: APIRoute = apiRoute(async ({ locals, url }) => {
     query: queryText(url.searchParams.get("q"), "q"),
     tagId: queryIdentifier(url.searchParams.get("tagId"), "tagId"),
     favorite: favoriteValue === "true"
-  });
-  return json({ bookmarks });
+  }, offset);
+  return json({ bookmarks, nextOffset: bookmarks.length === bookmarkPageSize ? offset + bookmarks.length : null });
 });
 
 export const POST: APIRoute = apiRoute(async ({ locals, request }) => {

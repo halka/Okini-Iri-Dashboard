@@ -1,3 +1,19 @@
+import type { Bookmark } from "../../domain/bookmarks";
+
+export async function requestBookmarks(params = new URLSearchParams()): Promise<Bookmark[]> {
+  const query = new URLSearchParams(params);
+  const bookmarks: Bookmark[] = [];
+  let offset = 0;
+  do {
+    query.set("offset", String(offset));
+    const page = await requestJson<{ bookmarks: Bookmark[]; nextOffset: number | null }>(`/api/bookmarks?${query}`);
+    bookmarks.push(...page.bookmarks);
+    if (page.nextOffset == null) return bookmarks;
+    if (page.nextOffset <= offset) throw new Error("Invalid bookmark pagination");
+    offset = page.nextOffset;
+  } while (true);
+}
+
 export class ApiClientError extends Error {
   constructor(
     message: string,

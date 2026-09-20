@@ -418,13 +418,13 @@ textarea:disabled {
 
 .workspace {
   width: 100%;
-  max-width: var(--page-max);
+  /* max-width: var(--page-max); */
   min-height: 0;
   justify-self: center;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* overscroll-behavior: contain; */
   scroll-behavior: smooth;
-  padding: 24px calc(24px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
+  /* padding: 24px calc(24px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left)); */
 }
 
 .workspace:focus-visible {

@@ -3,7 +3,7 @@ import type { AuditAction, AuditLog } from "../domain/audit";
 import type { ColorMode, ViewMode } from "../config/preferences";
 import type { Locale, MessageKey } from "../i18n/messages";
 import { readTextBlob, UnsupportedTextEncodingError } from "../lib/text-encoding";
-import { ApiClientError, requestJson, requestJsonLines } from "./lib/api-client";
+import { ApiClientError, requestBookmarks, requestJson, requestJsonLines } from "./lib/api-client";
 import { byId, formControl } from "./lib/dom";
 import { escapeAttribute, escapeHtml, faviconHtml, faviconMarkup, hasUrlCredentials, isHttpBookmarkUrl, safeHost, setupFaviconFallbacks } from "./lib/format";
 import { I18nController } from "./lib/i18n-controller";
@@ -201,8 +201,8 @@ async function refresh() {
   if (state.favoriteOnly) params.set("favorite", "true");
 
   try {
-    const [{ bookmarks }, { tags }] = await Promise.all([
-      requestJson<{ bookmarks: Bookmark[] }>(`/api/bookmarks?${params}`),
+    const [bookmarks, { tags }] = await Promise.all([
+      requestBookmarks(params),
       requestJson<{ tags: Tag[] }>("/api/tags")
     ]);
     if (sequence !== refreshSequence) return;
@@ -954,7 +954,7 @@ async function persistDraggedOrder() {
   if (!visibleIds.length) return;
   let ids = visibleIds;
   if (state.query || state.tagId || state.favoriteOnly) {
-    const { bookmarks } = await requestJson<{ bookmarks: Bookmark[] }>("/api/bookmarks");
+    const bookmarks = await requestBookmarks();
     const visibleIdSet = new Set(visibleIds);
     let visibleIndex = 0;
     ids = bookmarks.map((bookmark) => (visibleIdSet.has(bookmark.id) ? visibleIds[visibleIndex++] ?? bookmark.id : bookmark.id));

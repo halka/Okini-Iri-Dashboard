@@ -11,8 +11,11 @@ export function requireSession(session: AstroSession | undefined): AstroSession 
   return session;
 }
 
-export function readAuthUser(session: AstroSession) {
-  return session.get<AuthUser>(authUserKey);
+export async function readAuthUser(session: AstroSession) {
+  const user = await session.get<AuthUser>(authUserKey);
+  // Legacy development/anonymous sessions are not evidence of an OIDC login.
+  if (user?.local || user?.issuer === "urn:optional-authentication") return undefined;
+  return user;
 }
 
 export function readOidcTransaction(session: AstroSession) {

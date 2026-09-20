@@ -1,4 +1,5 @@
 import type { ChromeBookmarksImport } from "../domain/bookmarks";
+import { decodeHtml } from "./html-entities";
 
 const chromeRootFolderNames = new Set(["ブックマーク バー", "bookmarks bar"]);
 const vpnRequiredTagName = "VPN Required";
@@ -12,7 +13,7 @@ export function parseChromeBookmarksHtml(html: string, source = "uploaded-bookma
   let cursor = 0;
 
   while (cursor < html.length) {
-    const nextClose = findNext(html, /<\/DL>\s*<p>/gi, cursor);
+    const nextClose = findNext(html, /<\/DL\s*>/gi, cursor);
     const nextFolder = findNext(html, /<DT>\s*<H3\b/gi, cursor);
     const nextBookmark = findNext(html, /<DT>\s*<A\b/gi, cursor);
     const candidates = [
@@ -28,7 +29,7 @@ export function parseChromeBookmarksHtml(html: string, source = "uploaded-bookma
 
     if (next.type === "close") {
       stack.pop();
-      cursor += html.slice(cursor).match(/^<\/DL>\s*<p>/i)?.[0]?.length ?? "</DL><p>".length;
+      cursor += html.slice(cursor).match(/^<\/DL\s*>/i)![0].length;
       continue;
     }
 
@@ -104,20 +105,6 @@ function findTagEnd(value: string, start: number) {
 function attr(attrs: string, name: string) {
   const match = attrs.match(new RegExp(`${name}\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)`, "i"));
   return match ? decodeHtml(match[1].replace(/^["']|["']$/g, "")) : "";
-}
-
-function decodeHtml(value: string) {
-  return value
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 function slugPart(value: string) {
