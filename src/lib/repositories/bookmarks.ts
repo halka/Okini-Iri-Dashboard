@@ -131,12 +131,10 @@ export async function deleteBookmark(db: D1Database, id: string) {
 
 export async function reorderBookmarks(db: D1Database, ids: string[]) {
   if (ids.length) {
-    await db.prepare(`WITH ordering AS (
-      SELECT value AS id, CAST(key AS INTEGER) AS position FROM json_each(?)
-    )
-    UPDATE bookmarks SET sort_order = (SELECT position FROM ordering WHERE ordering.id = bookmarks.id),
+    await db.prepare(`UPDATE bookmarks SET sort_order = CAST(ordering.key AS INTEGER),
       updated_at = CURRENT_TIMESTAMP
-    WHERE id IN (SELECT id FROM ordering)`).bind(JSON.stringify(ids)).run();
+    FROM json_each(?) AS ordering
+    WHERE bookmarks.id = ordering.value`).bind(JSON.stringify(ids)).run();
   }
   return ids.length;
 }

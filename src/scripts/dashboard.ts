@@ -272,16 +272,16 @@ function scrollWorkspaceToTop() {
   window.clearTimeout(returnToTopTimer);
   const finishReturn = () => {
     window.clearTimeout(returnToTopTimer);
-    elements.workspace.removeEventListener("scrollend", finishReturn);
+    window.removeEventListener("scrollend", finishReturn);
     elements.homeFilterButton.classList.remove("is-returning");
     elements.homeFilterButton.blur();
     finishReturnToTop = null;
   };
   finishReturnToTop = finishReturn;
-  elements.workspace.addEventListener("scrollend", finishReturn, { once: true });
-  elements.workspace.scrollTo({ top: 0, behavior: "smooth" });
+  window.addEventListener("scrollend", finishReturn, { once: true });
+  window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   elements.moveToTopButton.hidden = true;
-  returnToTopTimer = window.setTimeout(finishReturn, elements.workspace.scrollTop > 0 ? 900 : 0);
+  returnToTopTimer = window.setTimeout(finishReturn, window.scrollY > 0 ? 900 : 0);
 }
 
 async function resetFilters() {
@@ -494,14 +494,16 @@ async function fillMetadata(force = false) {
   }
 
   metadataController?.abort();
-  metadataController = new AbortController();
+  const controller = new AbortController();
+  metadataController = controller;
   setMetadataStatus(t("metadataLoading"));
   elements.fetchMetadataButton.disabled = true;
   try {
     const { metadata } = await requestJson<{ metadata: { url: string; title: string; description: string; faviconUrl: string } }>(
       "/api/metadata",
-      { method: "POST", body: JSON.stringify({ url }), signal: metadataController.signal }
+      { method: "POST", body: JSON.stringify({ url }), signal: controller.signal }
     );
+    if (controller.signal.aborted || metadataController !== controller || urlInput.value.trim() !== url) return;
     urlInput.value = metadata.url;
     if (force || !titleInput.value.trim()) titleInput.value = metadata.title;
     if (force || !descriptionInput.value.trim()) descriptionInput.value = metadata.description;
@@ -511,11 +513,12 @@ async function fillMetadata(force = false) {
     updateMetadataButton(true);
     setMetadataStatus(t("metadataLoaded"));
   } catch (error) {
+    if (controller.signal.aborted || metadataController !== controller) return;
     if (error instanceof DOMException && error.name === "AbortError") return;
     updateFaviconPreview(faviconInput.value.trim(), titleInput.value);
     setMetadataStatus(error instanceof Error ? error.message : t("metadataFailed"));
   } finally {
-    if (!metadataController?.signal.aborted) elements.fetchMetadataButton.disabled = false;
+    if (metadataController === controller) elements.fetchMetadataButton.disabled = false;
   }
 }
 
@@ -1020,9 +1023,9 @@ elements.themeButton.addEventListener("click", () => cycleColorMode().catch(show
 theme.media.addEventListener("change", () => {
   if (theme.current() === "system") theme.apply("system");
 });
-elements.workspace.addEventListener("scroll", () => {
-  elements.moveToTopButton.hidden = elements.workspace.scrollTop < 320;
-});
+window.addEventListener("scroll", () => {
+  elements.moveToTopButton.hidden = window.scrollY < 320;
+}, { passive: true });
 elements.homeFilterButton.addEventListener("click", () => resetFilters().catch(showError));
 elements.bookmarkList.addEventListener("click", handleBookmarkListClick);
 elements.cardsViewButton.addEventListener("click", () => setViewMode("cards").catch(showError));
@@ -1125,6 +1128,9 @@ elements.fetchMetadataButton.addEventListener("click", () => {
 elements.faviconUploadInput.addEventListener("change", () => uploadFavicon(elements.faviconUploadInput).catch(showError));
 formControl<HTMLInputElement>(elements.form, "url").addEventListener("input", (event) => {
   window.clearTimeout(metadataTimer);
+  metadataController?.abort();
+  metadataController = null;
+  elements.fetchMetadataButton.disabled = false;
   const url = (event.currentTarget as HTMLInputElement).value.trim();
   updateMetadataButton(false);
   if (!url) {
@@ -1137,6 +1143,12 @@ formControl<HTMLInputElement>(elements.form, "url").addEventListener("input", (e
   }
   setMetadataStatus(t("metadataReady"));
   metadataTimer = window.setTimeout(() => fillMetadata(false).catch(showError), metadataFetchDelayMs);
+});
+elements.editor.addEventListener("close", () => {
+  window.clearTimeout(metadataTimer);
+  metadataController?.abort();
+  metadataController = null;
+  elements.fetchMetadataButton.disabled = false;
 });
 formControl<HTMLInputElement>(elements.form, "title").addEventListener("input", (event) => {
   const faviconUrl = formControl<HTMLInputElement>(elements.form, "faviconUrl").value;

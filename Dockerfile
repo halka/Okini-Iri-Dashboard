@@ -1,7 +1,35 @@
 # syntax=docker/dockerfile:1
 
+# workerd's official Linux binaries require glibc. Copy only their three ELF
+# dependencies; the build and final runtime still use Alpine and its musl Node.
+FROM debian:trixie-slim AS workerd-glibc
+
+RUN mkdir -p /compat/lib /compat/licenses \
+  && cp -L /lib/*-linux-gnu/libc.so.6 /lib/*-linux-gnu/libm.so.6 \
+    /lib/*-linux-gnu/ld-linux-*.so.* /compat/lib/ \
+  && cp /usr/share/doc/libc6/copyright /compat/licenses/glibc-copyright
+
+FROM node:22-alpine3.24 AS base
+
+RUN apk add --no-cache ca-certificates && update-ca-certificates
+
+COPY --from=workerd-glibc /compat/lib/ /lib/
+COPY --from=workerd-glibc /compat/licenses/ /usr/share/licenses/workerd-glibc/
+
+# The x86_64 ELF interpreter lives in /lib64; arm64 already uses /lib.
+RUN if [ -e /lib/ld-linux-x86-64.so.2 ]; then \
+      mkdir -p /lib64; \
+      if [ ! -e /lib64/ld-linux-x86-64.so.2 ]; then \
+        ln -s /lib/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2; \
+      fi; \
+    elif [ ! -e /lib/ld-linux-aarch64.so.1 ]; then \
+      echo "The container supports only linux/amd64 and linux/arm64" >&2; exit 1; \
+    fi
+
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
 # ---- Build stage ----
-FROM node:22-trixie-slim AS builder
+FROM base AS builder
 
 WORKDIR /app
 
@@ -20,21 +48,18 @@ COPY scripts/ ./scripts/
 RUN npm run build
 
 # ---- Runtime stage ----
-FROM node:22-trixie-slim AS runner
+FROM base AS runner
 
 WORKDIR /app
 
-# Keep the runtime trust store current for outbound fetches made by workerd.
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
-  && update-ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
-
-ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
-
 # Install the locked runtime dependencies, including Wrangler.
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev && npm cache clean --force
+
+# npm's workerd installer only warns when its native binary cannot start.
+# Exercise a real Worker with D1 and KV so incompatible images fail the build.
+COPY scripts/container-smoke.mjs ./scripts/container-smoke.mjs
+RUN node scripts/container-smoke.mjs
 
 # Copy built Worker and required project files
 COPY --from=builder /app/dist ./dist

@@ -55,13 +55,14 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   background: var(--bg);
+  scrollbar-gutter: stable;
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
   min-height: 100dvh;
-  overflow: hidden;
   background: var(--bg);
   color: var(--ink);
 }
@@ -126,17 +127,16 @@ textarea:disabled {
 }
 
 .shell {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: minmax(220px, auto) minmax(440px, 1fr) auto auto;
+  grid-template-columns: minmax(140px, auto) minmax(280px, 1fr) auto auto;
   align-items: center;
   gap: 16px;
   border-bottom: 1px solid var(--line);
@@ -193,7 +193,7 @@ textarea:disabled {
 
 .header-filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(170px, 240px) 124px;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 180px) 48px;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -418,13 +418,10 @@ textarea:disabled {
 
 .workspace {
   width: 100%;
-  /* max-width: var(--page-max); */
-  min-height: 0;
-  justify-self: center;
-  overflow-y: auto;
-  /* overscroll-behavior: contain; */
-  scroll-behavior: smooth;
-  /* padding: 24px calc(24px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left)); */
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding: 24px calc(24px + env(safe-area-inset-right)) calc(88px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
+  scroll-margin-top: 160px;
 }
 
 .workspace:focus-visible {
@@ -503,7 +500,7 @@ textarea:disabled {
 .bookmark-card {
   position: relative;
   display: grid;
-  grid-template-rows: auto 34px minmax(28px, 1fr) auto;
+  grid-template-rows: auto 34px 1fr;
   gap: 10px;
   min-width: 0;
   min-height: 174px;
@@ -652,6 +649,7 @@ textarea:disabled {
 
 .card-footer {
   display: grid;
+  align-self: end;
   gap: 10px;
 }
 
@@ -1852,7 +1850,7 @@ html[data-color-mode="dark"] .hljs-built_in {
   text-decoration: none;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .topbar {
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
@@ -1860,7 +1858,7 @@ html[data-color-mode="dark"] .hljs-built_in {
   .header-filters {
     grid-column: 1 / -1;
     grid-row: 2;
-    grid-template-columns: minmax(0, 1fr) minmax(108px, 124px);
+    grid-template-columns: minmax(0, 1fr) minmax(160px, 240px) 48px;
   }
 
   .bookmark-list {
@@ -1870,6 +1868,7 @@ html[data-color-mode="dark"] .hljs-built_in {
 
 @media (max-width: 700px) {
   .topbar {
+    position: static;
     grid-template-columns: minmax(0, 1fr) 48px auto;
     gap: 10px;
     padding: calc(10px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 12px calc(12px + env(safe-area-inset-left));
@@ -1878,7 +1877,12 @@ html[data-color-mode="dark"] .hljs-built_in {
   .app-title {
     grid-column: 1;
     grid-row: 1;
-    font-size: 16px;
+    font-size: 18px;
+  }
+
+  .app-title button {
+    max-width: 100%;
+    font-size: inherit;
   }
 
   .app-title img {
@@ -1955,7 +1959,8 @@ html[data-color-mode="dark"] .hljs-built_in {
   }
 
   .workspace {
-    padding: 14px calc(14px + env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+    padding: 16px calc(12px + env(safe-area-inset-right)) calc(84px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+    scroll-margin-top: 12px;
   }
 
   .bookmark-list {
@@ -1993,13 +1998,21 @@ html[data-color-mode="dark"] .hljs-built_in {
 
   .card-footer {
     align-items: stretch;
-    flex-direction: column;
   }
 
   .card-actions,
   .edit-link,
   .ghost-link {
     width: 100%;
+  }
+
+  .card-actions {
+    gap: 6px;
+  }
+
+  .card-actions .edit-link,
+  .card-actions .ghost-link {
+    min-width: 0;
   }
 
   .manager-grid,
@@ -2122,14 +2135,14 @@ html[data-color-mode="dark"] .hljs-built_in {
   }
 
   .header-tools {
-    grid-template-columns: repeat(3, 42px);
+    grid-template-columns: repeat(3, 44px);
   }
 
   .language-button,
   .theme-button,
   .icon-button {
-    width: 42px;
-    min-width: 42px;
+    width: 44px;
+    min-width: 44px;
   }
 
   .inline-tag-form,
@@ -2140,6 +2153,16 @@ html[data-color-mode="dark"] .hljs-built_in {
   .inline-tag-form button,
   .compact-form button {
     width: 100%;
+  }
+}
+
+@media (pointer: coarse) {
+  .edit-link,
+  .ghost-link,
+  .card-order-button,
+  .bulk-action,
+  .bulk-tag-select select {
+    min-height: 44px;
   }
 }
 

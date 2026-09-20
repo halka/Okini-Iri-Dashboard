@@ -384,6 +384,10 @@ npm run db:migrate:remote
 
 The repository ships a multi-stage `Dockerfile` and a `docker-compose.yml` so the dashboard can be run inside a container without installing Node.js, npm, or wrangler locally.
 
+The build and runtime stages use `node:22-alpine3.24` on `linux/amd64` and `linux/arm64`. Cloudflare's [workerd Linux binaries require glibc](https://github.com/cloudflare/workerd#running-workerd), so a separate official Debian stage supplies only `libc.so.6`, `libm.so.6`, the architecture's dynamic loader, and their license notice. Node.js and Alpine keep using musl. The final image excludes the donor filesystem and clears the npm download cache.
+
+Each image build runs `scripts/container-smoke.mjs` with the installed runtime dependencies to start a real Worker and verify D1 and KV. This makes a missing native runtime dependency a build failure, including after lockfile updates. Build and run both architectures before publishing a multi-platform image; image size and native Alpine behavior need verification on a Docker or compatible Linux container host.
+
 **Files**
 
 | File | Purpose |
@@ -440,7 +444,7 @@ environment:
 
 **Private certificate authorities**
 
-The image refreshes Debian's public CA bundle during the build. If an HTTPS proxy or private OIDC provider uses an internal CA, save its PEM certificate as `custom-ca.crt`, then uncomment the matching volume and `CUSTOM_CA_CERT` entries in `docker-compose.yml`. The certificate is mounted read-only and added to the container trust store at startup.
+The image installs Alpine's public CA bundle during the build. If an HTTPS proxy or private OIDC provider uses an internal CA, save its PEM certificate as `custom-ca.crt`, then uncomment the matching volume and `CUSTOM_CA_CERT` entries in `docker-compose.yml`. The certificate is mounted read-only and added to the container trust store at startup.
 
 > [!CAUTION]
 > Only install a CA that you administer and trust. TLS certificate verification remains enabled; do not use `NODE_TLS_REJECT_UNAUTHORIZED=0` or similar bypasses.
