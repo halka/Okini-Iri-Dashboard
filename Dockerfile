@@ -2,10 +2,23 @@
 
 FROM node:22-alpine3.24 AS base
 
-# workerd's prebuilt Linux binaries target glibc. Alpine's official gcompat
-# package supplies the required loader and compatibility layer without pulling
-# files from a second Linux distribution.
-RUN apk add --no-cache ca-certificates gcompat && update-ca-certificates
+ARG TARGETARCH
+ARG GLIBC_VERSION=2.42
+ARG GLIBC_KEY_SHA256=a14b57143989380b1e6a0716e4351a788f870db164ea0d6a02098aeddf3f4fdb
+
+# workerd's prebuilt Linux binaries require real glibc symbols that gcompat
+# does not provide. Install the signed Alpine glibc package for this platform;
+# pinning the signing key checksum prevents an unverified key replacement.
+RUN case "$TARGETARCH" in amd64|arm64) ;; *) echo "Unsupported architecture: $TARGETARCH" >&2; exit 1 ;; esac \
+  && apk add --no-cache ca-certificates \
+  && update-ca-certificates \
+  && wget -q https://raw.githubusercontent.com/dalet-oss/alpine-glibc/refs/heads/master/alpine-packaging-rsa.pub \
+    -O /etc/apk/keys/alpine-packaging-rsa.pub \
+  && echo "$GLIBC_KEY_SHA256  /etc/apk/keys/alpine-packaging-rsa.pub" | sha256sum -c - \
+  && wget -q "https://github.com/dalet-oss/alpine-glibc/releases/download/${GLIBC_VERSION}-${TARGETARCH}/glibc-${GLIBC_VERSION}.apk" \
+    -O /tmp/glibc.apk \
+  && apk add --force-overwrite --no-cache /tmp/glibc.apk \
+  && rm /tmp/glibc.apk
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 

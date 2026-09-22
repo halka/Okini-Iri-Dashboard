@@ -384,7 +384,7 @@ npm run db:migrate:remote
 
 The repository ships a multi-stage `Dockerfile` and a `docker-compose.yml` so the dashboard can be run inside a container without installing Node.js, npm, or wrangler locally.
 
-Every stage uses `node:22-alpine3.24` on `linux/amd64` and `linux/arm64`; the image no longer pulls files from Debian. Cloudflare's [workerd Linux binaries require glibc](https://github.com/cloudflare/workerd#running-workerd), so the Alpine base installs the distribution's official `gcompat` compatibility package alongside CA certificates. The final image clears the npm download cache.
+Every stage uses `node:22-alpine3.24` on `linux/amd64` and `linux/arm64`; the image no longer pulls files from Debian. Cloudflare's [workerd Linux binaries require glibc](https://github.com/cloudflare/workerd#running-workerd), including symbols that Alpine's `gcompat` does not provide. The Alpine base therefore installs the architecture-specific, signed glibc package from [dalet-oss/alpine-glibc](https://github.com/dalet-oss/alpine-glibc). Its version and signing-key SHA-256 are pinned in the Dockerfile, and `apk` verifies the package signature before installation. The final image clears the npm download cache.
 
 Each image build runs `scripts/container-smoke.mjs` with the installed runtime dependencies to start a real Worker and verify D1 and KV. This makes a missing native runtime dependency a build failure, including after lockfile updates. Build and run both architectures before publishing a multi-platform image; image size and native Alpine behavior need verification on a Docker or compatible Linux container host.
 
