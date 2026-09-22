@@ -1,30 +1,11 @@
 # syntax=docker/dockerfile:1
 
-# workerd's official Linux binaries require glibc. Copy only their three ELF
-# dependencies; the build and final runtime still use Alpine and its musl Node.
-FROM debian:trixie-slim AS workerd-glibc
-
-RUN mkdir -p /compat/lib /compat/licenses \
-  && cp -L /lib/*-linux-gnu/libc.so.6 /lib/*-linux-gnu/libm.so.6 \
-    /lib/*-linux-gnu/ld-linux-*.so.* /compat/lib/ \
-  && cp /usr/share/doc/libc6/copyright /compat/licenses/glibc-copyright
-
 FROM node:22-alpine3.24 AS base
 
-RUN apk add --no-cache ca-certificates && update-ca-certificates
-
-COPY --from=workerd-glibc /compat/lib/ /lib/
-COPY --from=workerd-glibc /compat/licenses/ /usr/share/licenses/workerd-glibc/
-
-# The x86_64 ELF interpreter lives in /lib64; arm64 already uses /lib.
-RUN if [ -e /lib/ld-linux-x86-64.so.2 ]; then \
-      mkdir -p /lib64; \
-      if [ ! -e /lib64/ld-linux-x86-64.so.2 ]; then \
-        ln -s /lib/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2; \
-      fi; \
-    elif [ ! -e /lib/ld-linux-aarch64.so.1 ]; then \
-      echo "The container supports only linux/amd64 and linux/arm64" >&2; exit 1; \
-    fi
+# workerd's prebuilt Linux binaries target glibc. Alpine's official gcompat
+# package supplies the required loader and compatibility layer without pulling
+# files from a second Linux distribution.
+RUN apk add --no-cache ca-certificates gcompat && update-ca-certificates
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 

@@ -5,6 +5,16 @@ import { once } from "node:events";
 import { spawn } from "node:child_process";
 import test from "node:test";
 
+test("container stages use Alpine without a Debian donor", () => {
+  const dockerfile = readFileSync(new URL("../Dockerfile", import.meta.url), "utf8");
+  const stages = [...dockerfile.matchAll(/^FROM\s+(\S+)/gm)].map((match) => match[1]);
+  assert.ok(stages.length >= 2);
+  assert.match(stages[0], /alpine/);
+  assert.ok(stages.slice(1).every((image) => image === "base"), `unexpected external stage found: ${stages.join(", ")}`);
+  assert.match(dockerfile, /apk add --no-cache ca-certificates gcompat/);
+  assert.doesNotMatch(dockerfile, /\b(?:debian|apt-get)\b/i);
+});
+
 test("container health command works with protected APIs and rejects server errors", async () => {
   const compose = readFileSync(new URL("../docker-compose.yml", import.meta.url), "utf8");
   const command = JSON.parse(compose.match(/^\s+test:\s*(\[.*\])$/m)[1]);
