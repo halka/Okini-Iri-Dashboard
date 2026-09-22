@@ -201,7 +201,7 @@ textarea:disabled {
 
 .header-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, 180px) 48px;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 180px) max-content;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -310,6 +310,10 @@ textarea:disabled {
   font-size: 14px;
 }
 
+#favoriteOnly {
+  white-space: nowrap;
+}
+
 .view-mode-toggle {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -387,6 +391,7 @@ textarea:disabled {
 .menu-label {
   font-size: 12px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .primary,
@@ -1936,7 +1941,7 @@ html[data-color-mode="dark"] .hljs-built_in {
 
 @media (max-width: 700px) {
   .topbar {
-    position: static;
+    position: sticky;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px;
     padding: calc(10px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 12px calc(12px + env(safe-area-inset-left));
@@ -1962,7 +1967,7 @@ html[data-color-mode="dark"] .hljs-built_in {
     grid-column: 2;
     grid-row: 1;
     display: grid;
-    grid-template-columns: 44px 44px 76px;
+    grid-template-columns: 44px 44px 88px;
     gap: 6px;
   }
 
@@ -1980,8 +1985,8 @@ html[data-color-mode="dark"] .hljs-built_in {
   }
 
   .icon-button {
-    width: 76px;
-    min-width: 76px;
+    width: 88px;
+    min-width: 88px;
     min-height: 44px;
     padding: 0 8px;
   }
@@ -2214,7 +2219,7 @@ html[data-color-mode="dark"] .hljs-built_in {
   }
 
   .header-tools {
-    grid-template-columns: 40px 40px 68px;
+    grid-template-columns: 40px 40px 80px;
   }
 
   .language-button,
@@ -2224,8 +2229,8 @@ html[data-color-mode="dark"] .hljs-built_in {
   }
 
   .icon-button {
-    width: 68px;
-    min-width: 68px;
+    width: 80px;
+    min-width: 80px;
     padding-inline: 6px;
   }
 
