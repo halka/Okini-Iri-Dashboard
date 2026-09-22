@@ -68,9 +68,8 @@ const { t } = Astro.props;
         {t.colorModeAuto}
       </button>
       <button id="manageDataButton" type="button" class="icon-button" aria-label={t.manageData} title={t.manageData} data-i18n-aria-label="manageData" data-i18n-title="manageData">
-        <span></span>
-        <span></span>
-        <span></span>
+        <span class="menu-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="menu-label" data-i18n="manageData">{t.manageData}</span>
       </button>
     </div>
   </header>
@@ -78,6 +77,10 @@ const { t } = Astro.props;
   <div id="workspace" class="workspace" tabindex="-1">
     <section class="content-grid" aria-labelledby="bookmarkListTitle">
       <h2 id="bookmarkListTitle" class="visually-hidden" data-i18n="bookmarks">{t.bookmarks}</h2>
+      <div class="results-bar">
+        <p id="workspaceStatus" role="status">{t.loading}</p>
+        <button id="clearFiltersButton" type="button" class="clear-filters" data-i18n="clearFilters" hidden>{t.clearFilters}</button>
+      </div>
       <div id="bulkActions" class="bulk-actions" hidden>
         <span><output id="bulkSelectionCount">0</output> <span data-i18n="selectedBookmarks">{t.selectedBookmarks}</span></span>
         <label class="bulk-tag-select">
@@ -91,7 +94,6 @@ const { t } = Astro.props;
         <button id="bulkClear" type="button" class="ghost-link" data-i18n="clearSelection">{t.clearSelection}</button>
       </div>
       <div id="bookmarkList" class="bookmark-list" aria-busy="true"></div>
-      <p id="workspaceStatus" class="visually-hidden" role="status">{t.loading}</p>
     </section>
   </div>
   <button id="moveToTopButton" type="button" class="move-top-button" aria-label={t.moveToTop} title={t.moveToTop} data-i18n-aria-label="moveToTop" data-i18n-title="moveToTop" hidden>{t.moveToTop}</button>

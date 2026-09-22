@@ -31,6 +31,7 @@ const state: DashboardState = {
 const elements = {
   bookmarkList: byId<HTMLElement>("bookmarkList"),
   workspaceStatus: byId<HTMLElement>("workspaceStatus"),
+  clearFiltersButton: byId<HTMLButtonElement>("clearFiltersButton"),
   workspace: byId<HTMLElement>("workspace"),
   tagSelect: byId<HTMLSelectElement>("tagSelect"),
   searchInput: byId<HTMLInputElement>("searchInput"),
@@ -355,6 +356,7 @@ async function loadAuditLogs() {
 
 function renderBookmarks() {
   const hasActiveFilters = Boolean(state.query || state.tagId || state.favoriteOnly);
+  elements.clearFiltersButton.hidden = !hasActiveFilters;
   elements.workspaceStatus.textContent = state.bookmarks.length
     ? t("linksFound", { count: state.bookmarks.length })
     : hasActiveFilters
@@ -404,12 +406,12 @@ function renderBookmarks() {
             <button type="button" class="card-order-button" data-move-up="${escapeAttribute(bookmark.id)}"${index === 0 ? " disabled" : ""} aria-label="${escapeAttribute(t("moveUp"))}" title="${escapeAttribute(t("moveUp"))}">↑</button>
             <button type="button" class="card-order-button" data-move-down="${escapeAttribute(bookmark.id)}"${index === bookmarks.length - 1 ? " disabled" : ""} aria-label="${escapeAttribute(t("moveDown"))}" title="${escapeAttribute(t("moveDown"))}">↓</button>
           </div>`;
-      return `<article class="bookmark-card${selected ? " is-selected" : ""}" data-bookmark-id="${escapeAttribute(bookmark.id)}"${hasActiveFilters ? "" : " draggable=\"true\""}>
+      return `<article class="bookmark-card${selected ? " is-selected" : ""}${previewAction ? " has-preview" : ""}" data-bookmark-id="${escapeAttribute(bookmark.id)}"${hasActiveFilters ? "" : " draggable=\"true\""}>
         <input class="bookmark-select" type="checkbox" data-select-bookmark="${escapeAttribute(bookmark.id)}"${selected ? " checked" : ""} aria-label="${escapeAttribute(t("selectBookmark", { title: bookmark.title }))}" />
         <div class="card-main">
           ${main}
         </div>
-        <div class="card-preview-row">${previewAction}</div>
+        ${previewAction ? `<div class="card-preview-row">${previewAction}</div>` : ""}
         <div class="card-footer">
           <div class="card-tags">${tags}</div>
           <div class="card-actions">
@@ -1027,6 +1029,7 @@ window.addEventListener("scroll", () => {
   elements.moveToTopButton.hidden = window.scrollY < 320;
 }, { passive: true });
 elements.homeFilterButton.addEventListener("click", () => resetFilters().catch(showError));
+elements.clearFiltersButton.addEventListener("click", () => resetFilters().catch(showError));
 elements.bookmarkList.addEventListener("click", handleBookmarkListClick);
 elements.cardsViewButton.addEventListener("click", () => setViewMode("cards").catch(showError));
 elements.listViewButton.addEventListener("click", () => setViewMode("list").catch(showError));
