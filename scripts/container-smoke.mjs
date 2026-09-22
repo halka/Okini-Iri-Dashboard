@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { Miniflare } from "miniflare";
+import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 
 // Keep storage temporary: this checks the image, not the application's volume.
-const worker = new Miniflare({
+const worker = new Miniflare(convertV4MiniflareOptions({
   modules: true,
   compatibilityDate: "2026-07-17",
   d1Databases: ["DB"],
@@ -14,7 +14,7 @@ const worker = new Miniflare({
       return Response.json({ value: row.value, status: await env.PREFERENCES.get("container-smoke") });
     }
   }`
-});
+}));
 
 try {
   const response = await worker.dispatchFetch("http://localhost/container-smoke");
