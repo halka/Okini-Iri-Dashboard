@@ -9,8 +9,8 @@
   --int: #fafafa;
   --muted: #686868;
   --line: #d9d9df;
-  --primary: #b52d68;
-  --primary-hover: #962252;
+  --primary: #ff8fba;
+  --primary-hover: #ffadd0;
   --primary-soft: #f9e4ed;
   --on-primary: #ffffff;
   --gold: #765500;
@@ -806,7 +806,6 @@ textarea:disabled {
 .preview-link {
   background: var(--primary);
   color: var(--on-primary);
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--primary), transparent 72%);
 }
 
 .preview-link:hover,

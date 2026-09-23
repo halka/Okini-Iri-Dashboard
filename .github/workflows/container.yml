@@ -1,0 +1,66 @@
+name: Alpine container
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-smoke:
+    name: Build and smoke-test (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      DOCKER_DEFAULT_PLATFORM: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            architecture: amd64
+            machine: x86_64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            architecture: arm64
+            machine: aarch64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify native runner architecture
+        run: test "$(uname -m)" = "${{ matrix.machine }}"
+
+      - name: Build Alpine image
+        run: docker compose build dashboard
+
+      - name: Smoke-test workerd, D1, and KV
+        run: |
+          test "$(docker compose run --rm --no-deps --entrypoint uname dashboard -m)" = "${{ matrix.machine }}"
+          docker compose run --rm --no-deps --entrypoint node dashboard scripts/container-smoke.mjs
+
+      - name: Start container and wait for health check
+        run: docker compose up --detach --no-build --wait --wait-timeout 120 dashboard
+
+      - name: Verify health endpoint
+        run: |
+          container_id="$(docker compose ps --quiet dashboard)"
+          image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
+          test "$(docker image inspect --format '{{.Architecture}}' "$image_id")" = "${{ matrix.architecture }}"
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8787/favicon.svg >/dev/null
+
+      - name: Show container logs after failure
+        if: failure()
+        run: docker compose logs --no-color dashboard
+
+      - name: Clean up containers
+        if: always()
+        run: docker compose down --volumes
