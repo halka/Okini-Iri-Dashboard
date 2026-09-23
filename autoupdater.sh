@@ -57,7 +57,7 @@ sparkle() {
 }
 
 printf '\n%s%s╭──────────────────────────────────────────╮%s\n' "$PURPLE" "$BOLD" "$RESET"
-printf '%s%s│   ✨  Okini Iri Dashboard Updater  ✨    │%s\n' "$PURPLE" "$BOLD" "$RESET"
+printf '%s%s│   ✨  SHIORI Dashboard Updater  ✨       │%s\n' "$PURPLE" "$BOLD" "$RESET"
 printf '%s%s╰──────────────────────────────────────────╯%s\n' "$PURPLE" "$BOLD" "$RESET"
 printf '%s💾 Your D1 / KV data volume will be preserved%s\n' "$GREEN" "$RESET"
 
