@@ -1,4 +1,4 @@
-import type { Bookmark, BookmarkInput, Tag } from "../domain/bookmarks";
+import type { Bookmark, BookmarkInput, BookmarkSortMode, Tag } from "../domain/bookmarks";
 import type { AuditAction, AuditLog } from "../domain/audit";
 import type { ColorMode, ViewMode } from "../config/preferences";
 import type { Locale, MessageKey } from "../i18n/messages";
@@ -16,6 +16,7 @@ type DashboardState = {
   tagId: string;
   query: string;
   favoriteOnly: boolean;
+  sort: BookmarkSortMode;
   selectedBookmarkIds: Set<string>;
 };
 
@@ -25,6 +26,7 @@ const state: DashboardState = {
   tagId: "",
   query: "",
   favoriteOnly: false,
+  sort: "manual",
   selectedBookmarkIds: new Set()
 };
 
@@ -32,6 +34,7 @@ const elements = {
   bookmarkList: byId<HTMLElement>("bookmarkList"),
   workspaceStatus: byId<HTMLElement>("workspaceStatus"),
   clearFiltersButton: byId<HTMLButtonElement>("clearFiltersButton"),
+  sortSelect: byId<HTMLSelectElement>("sortSelect"),
   workspace: byId<HTMLElement>("workspace"),
   tagSelect: byId<HTMLSelectElement>("tagSelect"),
   searchInput: byId<HTMLInputElement>("searchInput"),
@@ -200,6 +203,7 @@ async function refresh() {
   if (state.query) params.set("q", state.query);
   if (state.tagId) params.set("tagId", state.tagId);
   if (state.favoriteOnly) params.set("favorite", "true");
+  params.set("sort", state.sort);
 
   try {
     const [bookmarks, { tags }] = await Promise.all([
@@ -376,6 +380,7 @@ function renderBookmarks() {
   }
 
   const bookmarks = state.bookmarks;
+  const isManualOrder = state.sort === "manual";
   elements.bookmarkList.innerHTML = bookmarks
     .map((bookmark, index) => {
       const isOpenable = isHttpBookmarkUrl(bookmark.url);
@@ -402,11 +407,11 @@ function renderBookmarks() {
           </div>
         </div>`;
       const selected = state.selectedBookmarkIds.has(bookmark.id);
-      const orderActions = `<div class="card-order-actions" aria-label="${escapeAttribute(t("bookmarks"))}">
+      const orderActions = isManualOrder ? `<div class="card-order-actions" aria-label="${escapeAttribute(t("bookmarks"))}">
             <button type="button" class="card-order-button" data-move-up="${escapeAttribute(bookmark.id)}"${index === 0 ? " disabled" : ""} aria-label="${escapeAttribute(t("moveUp"))}" title="${escapeAttribute(t("moveUp"))}">↑</button>
             <button type="button" class="card-order-button" data-move-down="${escapeAttribute(bookmark.id)}"${index === bookmarks.length - 1 ? " disabled" : ""} aria-label="${escapeAttribute(t("moveDown"))}" title="${escapeAttribute(t("moveDown"))}">↓</button>
-          </div>`;
-      return `<article class="bookmark-card${selected ? " is-selected" : ""}${previewAction ? " has-preview" : ""}" data-bookmark-id="${escapeAttribute(bookmark.id)}"${hasActiveFilters ? "" : " draggable=\"true\""}>
+          </div>` : "";
+      return `<article class="bookmark-card${selected ? " is-selected" : ""}${previewAction ? " has-preview" : ""}" data-bookmark-id="${escapeAttribute(bookmark.id)}"${isManualOrder && !hasActiveFilters ? " draggable=\"true\"" : ""}>
         <input class="bookmark-select" type="checkbox" data-select-bookmark="${escapeAttribute(bookmark.id)}"${selected ? " checked" : ""} aria-label="${escapeAttribute(t("selectBookmark", { title: bookmark.title }))}" />
         <div class="card-main">
           ${main}
@@ -1237,6 +1242,10 @@ elements.clearSearchButton.addEventListener("click", () => {
 elements.favoriteOnlyButton.addEventListener("click", () => {
   state.favoriteOnly = !state.favoriteOnly;
   renderFavoriteFilter();
+  refresh().catch(showError);
+});
+elements.sortSelect.addEventListener("change", () => {
+  state.sort = elements.sortSelect.value as BookmarkSortMode;
   refresh().catch(showError);
 });
 elements.bulkTagSelect.addEventListener("change", renderBulkActions);

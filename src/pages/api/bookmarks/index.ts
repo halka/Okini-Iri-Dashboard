@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { bookmarkSortModes } from "../../../domain/bookmarks";
 import { bookmarkPageSize } from "../../../config/bookmark-limits";
 import { createBookmark, listBookmarks } from "../../../lib/repositories/bookmarks";
 import { recordAuditLogSafely } from "../../../lib/repositories/audit";
@@ -37,10 +38,16 @@ export const GET: APIRoute = apiRoute(async ({ locals, url }) => {
   if (favoriteValue && favoriteValue !== "true" && favoriteValue !== "false") {
     throw new ApiError("favorite is invalid", 422, "validation_error");
   }
+  const sortValue = queryText(url.searchParams.get("sort"), "sort");
+  if (sortValue && !(bookmarkSortModes as readonly string[]).includes(sortValue)) {
+    throw new ApiError("sort is invalid", 422, "validation_error");
+  }
+  const sort = bookmarkSortModes.find((mode) => mode === sortValue) ?? "manual";
   const bookmarks = await listBookmarks(getDb(locals), {
     query: queryText(url.searchParams.get("q"), "q"),
     tagId: queryIdentifier(url.searchParams.get("tagId"), "tagId"),
-    favorite: favoriteValue === "true"
+    favorite: favoriteValue === "true",
+    sort
   }, offset);
   return json({ bookmarks, nextOffset: bookmarks.length === bookmarkPageSize ? offset + bookmarks.length : null });
 });

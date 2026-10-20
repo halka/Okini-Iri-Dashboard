@@ -33,6 +33,9 @@ export type Bookmark = {
   tags: Tag[];
 };
 
+export const bookmarkSortModes = ["manual", "createdAtDesc", "createdAtAsc"] as const;
+export type BookmarkSortMode = (typeof bookmarkSortModes)[number];
+
 export type BookmarkInput = {
   title: string;
   url: string;
@@ -51,6 +54,7 @@ export type BookmarkFilters = {
   query?: string;
   tagId?: string;
   favorite?: boolean;
+  sort?: BookmarkSortMode;
 };
 
 export type ChromeBookmarkFolder = {

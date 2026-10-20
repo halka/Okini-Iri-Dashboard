@@ -46,11 +46,17 @@ export async function listBookmarks(db: D1Database, filters: BookmarkFilters = {
 
   if (filters.favorite) where.push("b.favorite = 1");
 
+  const orderBy = filters.sort === "createdAtDesc"
+    ? "b.created_at DESC, b.sort_order, b.id"
+    : filters.sort === "createdAtAsc"
+      ? "b.created_at ASC, b.sort_order, b.id"
+      : "b.sort_order, b.created_at, b.id";
+
   const result = await db
     .prepare(`${bookmarkSelect}
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
       GROUP BY b.id
-      ORDER BY b.sort_order, b.created_at, b.id
+      ORDER BY ${orderBy}
       LIMIT ? OFFSET ?`)
     .bind(...binds, bookmarkPageSize, offset)
     .all<D1Row>();

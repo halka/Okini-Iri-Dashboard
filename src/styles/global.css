@@ -463,11 +463,35 @@ textarea:disabled {
 
 .results-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   min-height: 36px;
   margin-bottom: 12px;
+}
+
+.results-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.sort-filter {
+  display: block;
+}
+
+.sort-filter select {
+  min-height: 36px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--field);
+  padding: 0 12px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
 }
 
 .results-bar p {

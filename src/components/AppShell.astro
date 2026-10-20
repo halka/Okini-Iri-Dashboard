@@ -79,7 +79,17 @@ const { t } = Astro.props;
       <h2 id="bookmarkListTitle" class="visually-hidden" data-i18n="bookmarks">{t.bookmarks}</h2>
       <div class="results-bar">
         <p id="workspaceStatus" role="status">{t.loading}</p>
-        <button id="clearFiltersButton" type="button" class="clear-filters" data-i18n="clearFilters" hidden>{t.clearFilters}</button>
+        <div class="results-controls">
+          <label class="sort-filter">
+            <span class="visually-hidden" data-i18n="sortBookmarks">{t.sortBookmarks}</span>
+            <select id="sortSelect" aria-label={t.sortBookmarks} data-i18n-aria-label="sortBookmarks">
+              <option value="manual" data-i18n="sortManual">{t.sortManual}</option>
+              <option value="createdAtDesc" data-i18n="sortCreatedNewest">{t.sortCreatedNewest}</option>
+              <option value="createdAtAsc" data-i18n="sortCreatedOldest">{t.sortCreatedOldest}</option>
+            </select>
+          </label>
+          <button id="clearFiltersButton" type="button" class="clear-filters" data-i18n="clearFilters" hidden>{t.clearFilters}</button>
+        </div>
       </div>
       <div id="bulkActions" class="bulk-actions" hidden>
         <span><output id="bulkSelectionCount">0</output> <span data-i18n="selectedBookmarks">{t.selectedBookmarks}</span></span>
